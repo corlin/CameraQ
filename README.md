@@ -4,6 +4,12 @@ CameraQ is an intelligent photography assistant designed to analyze image compos
 
 ## Features
 
+- 📸 **Real-time Composition Scoring**: Evaluates framing in real-time via a 5-axis model (Subject, Structure, Balance, Interference, Style) and presents visual feedback.
+- 🤖 **Generative AI Coaching**: Integrates Gemini 2.5 Flash for contextual, stylistic, and emotional photography tips directly from the viewfinder.
+- 👁️ **Advanced Computer Vision**: Leverages YOLO11 for object and human pose detection, alongside visual saliency mapping to identify the natural focal points of an image.
+- 📐 **Dynamic Aesthetic Rules**: Automatically detects rule-of-thirds alignment, horizon leveling, color harmony, over/under exposure, and background interference.
+- ⚙️ **Pro Settings Dashboard**: Interactive sliding side panel with granular control over AI sampling rates, analysis throttling to optimize FPS, and module toggles.
+
 ## Roadmap
 
 - [x] **Stage 1 (Offline MVP)**: Process local images with basic Saliency & YOLO detection, and output static compositional score/feedback.
