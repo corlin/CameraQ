@@ -53,3 +53,28 @@ def test_yolo_wins_if_saliency_small():
     assert primary is not None
     assert primary.source == SourceType.YOLO
     assert primary.class_name == "person"
+
+from unittest.mock import patch, MagicMock
+
+@patch("src.core.gemini_client.genai.Client")
+def test_analyzer_scene_context_async(mock_client_class):
+    # Just test that process_frame doesn't block and enqueues the frame
+    analyzer = CameraQAnalyzer()
+    analyzer.settings.gemini_api_key = "fake_key"
+    
+    # Fast forward time to trigger enqueue
+    import time
+    analyzer._last_scene_time = time.time() - 11.0
+    
+    frame = np.zeros((100, 100, 3), dtype=np.uint8)
+    
+    # Process frame
+    result = analyzer.process_frame(frame)
+    
+    # Result shouldn't have scene context yet (it's async)
+    assert result.current_scene_context is None
+    
+    # Check that _last_scene_time was updated, indicating we enqueued
+    import time
+    assert analyzer._last_scene_time > time.time() - 1.0
+

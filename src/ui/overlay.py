@@ -17,6 +17,20 @@ class OverlayRenderer:
         self.sidebar_offset = 320.0 # start fully hidden
         self.toggle_bounds = {}
         self.numeric_bounds = {}
+        self.input_mode = False
+        self.user_query = ""
+        self.ai_coach_last_update = 0.0
+        self.ai_coach_message = None
+        self.scene_icons = {
+            "Outdoor": "⛰️ Outdoor",
+            "Indoor": "🏠 Indoor",
+            "Portrait": "👤 Portrait",
+            "Landscape": "🌄 Landscape",
+            "Night": "🌙 Night",
+            "Bright": "☀️ Bright",
+            "Dark": "🌑 Dark",
+            "Backlit": "✨ Backlit"
+        }
         
         # Pre-load fonts to avoid loading them per-frame
         try:
@@ -54,6 +68,7 @@ class OverlayRenderer:
             out_frame = frame.copy()
             
         h, w = out_frame.shape[:2]
+        self.last_frame_size = (w, h)
 
         # Use PIL to draw Chinese text and translucent shapes
         img_pil = Image.fromarray(cv2.cvtColor(out_frame, cv2.COLOR_BGR2RGB)).convert("RGBA")
@@ -79,9 +94,17 @@ class OverlayRenderer:
         
         if analysis:
             current_time = time.time()
+            level = getattr(self.settings, "coaching_level", "COACH")
+            
+            # Draw Coaching Level Indicator
+            level_text = f"AI: {level}"
+            bbox = draw_ov.textbbox((w//2 - 40, 10), level_text, font=self.small_font)
+            lw = bbox[2] - bbox[0]
+            draw_ov.rectangle([w//2 - lw//2 - 10, 10, w//2 + lw//2 + 10, 40], fill=(0, 0, 0, 150))
+            draw_ov.text((w//2 - lw//2, 12), level_text, font=self.small_font, fill=(200, 200, 200, 255))
             
             # Draw subject bounding boxes and labels
-            if hasattr(analysis, 'subjects') and analysis.subjects:
+            if level == "PRO" and hasattr(analysis, 'subjects') and analysis.subjects:
                 for sub in analysis.subjects:
                     color = (0, 255, 0, 160) if sub.is_primary_subject else (200, 200, 200, 120)
                     thickness = 2 if sub.is_primary_subject else 1
@@ -91,8 +114,18 @@ class OverlayRenderer:
                     sx2 = int(sx1 + sub.bounding_box.width)
                     sy2 = int(sy1 + sub.bounding_box.height)
                     
-                    # Draw translucent box
+                    # Draw translucent box (T004: professional thin lines)
+                    thickness = 1 # Thin lines
                     draw_ov.rectangle([sx1, sy1, sx2, sy2], outline=color, width=thickness)
+                    
+                    # Corner brackets (reticles)
+                    length = min(30, max(5, (sx2-sx1)//4), max(5, (sy2-sy1)//4))
+                    for point in [(sx1, sy1), (sx2, sy1), (sx1, sy2), (sx2, sy2)]:
+                        px, py = point
+                        dx = 1 if px == sx1 else -1
+                        dy = 1 if py == sy1 else -1
+                        draw_ov.line([(px, py), (px + dx * length, py)], fill=color, width=2)
+                        draw_ov.line([(px, py), (px, py + dy * length)], fill=color, width=2)
                     
                     # Text label with background plate
                     text = f"{sub.class_name} {sub.confidence:.2f}"
@@ -106,7 +139,7 @@ class OverlayRenderer:
                     draw_ov.text((sx1 + 4, plate_y1 + 2), text, font=self.small_font, fill=(255, 255, 255, 255))
 
             # Draw tracked motion vectors
-            if getattr(analysis, 'tracked_subjects', None):
+            if level == "PRO" and getattr(analysis, 'tracked_subjects', None):
                 for ts in analysis.tracked_subjects:
                     if abs(ts.velocity_x) > 1 or abs(ts.velocity_y) > 1:
                         cx = ts.bounding_box.x + ts.bounding_box.width / 2.0
@@ -118,7 +151,7 @@ class OverlayRenderer:
                         draw_ov.ellipse([(end_x-4, end_y-4), (end_x+4, end_y+4)], fill=(0, 165, 255, 220))
 
             # Draw Aesthetics Warning
-            if getattr(analysis, 'aesthetics', None) and analysis.aesthetics.lighting_feedback:
+            if level in ["COACH", "PRO"] and getattr(analysis, 'aesthetics', None) and analysis.aesthetics.lighting_feedback:
                 warning_text = analysis.aesthetics.lighting_feedback
                 bbox = draw_ov.textbbox((0, 0), warning_text, font=self.font)
                 w_text = bbox[2] - bbox[0]
@@ -129,7 +162,7 @@ class OverlayRenderer:
                 draw_ov.text((x_warn, 50), warning_text, font=self.font, fill=(255, 100, 100, 255))
 
             # Draw Shutter Opportunity
-            if getattr(analysis, 'shutter_opportunity', False):
+            if level in ["COACH", "PRO"] and getattr(analysis, 'shutter_opportunity', False):
                 shutter_text = "✨ 绝佳抓拍时机! (Perfect Shutter Opportunity!) ✨"
                 bbox = draw_ov.textbbox((0, 0), shutter_text, font=self.font)
                 s_w = bbox[2] - bbox[0]
@@ -140,44 +173,160 @@ class OverlayRenderer:
                 draw_ov.rectangle([x_shutter - 15, y_shutter - 10, x_shutter + s_w + 15, y_shutter + s_h + 10], fill=(0, 0, 0, 160), outline=(0, 255, 255, 200), width=2)
                 draw_ov.text((x_shutter, y_shutter), shutter_text, font=self.font, fill=(0, 255, 255, 255))
 
-            # Draw Sub-scores (Radar/Bar Chart)
-            if hasattr(analysis, 'score') and analysis.score:
-                self._draw_subscores(draw_ov, analysis.score, 10, h - 250)
-
             # Debounce feedback text updates
             if analysis.feedback_message != self.last_feedback:
                 if current_time - self.last_update_time >= self.debounce_interval:
                     self.last_feedback = analysis.feedback_message
                     self.last_update_time = current_time
 
+            # Pre-calculate feedback layout to avoid overlap with sub-scores
+            wrapped_lines = []
+            if level in ["COACH", "PRO"] and self.last_feedback:
+                max_text_width = w - 40
+                for p in self.last_feedback.split('\n'):
+                    line = ""
+                    for char in p:
+                        test_line = line + char
+                        bbox = draw_ov.textbbox((0,0), test_line, font=self.small_font)
+                        tw = bbox[2] - bbox[0]
+                        if tw > max_text_width and line != "":
+                            wrapped_lines.append(line)
+                            line = char
+                        else:
+                            line = test_line
+                    if line:
+                        wrapped_lines.append(line)
+                        
+            total_text_height = len(wrapped_lines) * 35 if wrapped_lines else 0
+            feedback_y_offset = h - 30 - total_text_height if wrapped_lines else h - 30
+
+            # Draw Sub-scores (Radar/Bar Chart)
+            if level == "PRO" and hasattr(analysis, 'score') and analysis.score:
+                # Dynamic positioning above the feedback text (bg_h is approx 135)
+                subscore_h = 5 * 20 + 35
+                subscores_y = feedback_y_offset - subscore_h - 15
+                self._draw_subscores(draw_ov, analysis.score, 10, subscores_y)
+
             # Draw feedback (which already includes the score in Chinese)
-            if self.last_feedback:
-                lines = self.last_feedback.split('\n')
-                total_text_height = len(lines) * 35
-                y_offset = h - 30 - total_text_height
-                
-                # Draw a nice background plate for the feedback block
-                max_width = max([draw_ov.textbbox((0,0), line, font=self.small_font)[2] - draw_ov.textbbox((0,0), line, font=self.small_font)[0] for line in lines])
+            if wrapped_lines:
+                y_offset = feedback_y_offset
+                max_width = max([draw_ov.textbbox((0,0), line, font=self.small_font)[2] - draw_ov.textbbox((0,0), line, font=self.small_font)[0] for line in wrapped_lines]) if wrapped_lines else 0
                 draw_ov.rectangle([10, y_offset - 10, 10 + max_width + 20, y_offset + total_text_height], fill=(0, 0, 0, 150), outline=(200, 200, 200, 100), width=1)
                 
-                for line in lines:
+                for line in wrapped_lines:
                     draw_ov.text((20, y_offset), line, font=self.small_font, fill=(255, 255, 255, 255))
                     y_offset += 35
             
             # Draw AI Coaching (US2: Use duration/is_active logic)
-            if getattr(analysis, 'ai_coaching', None):
+            if level != "OFF" and getattr(analysis, 'ai_coaching', None):
                 ai = analysis.ai_coaching
                 if not ai.is_error and ai.is_active(current_time):
-                    # Draw a nice semi-transparent background bubble for the AI text
-                    coach_text = f"🤖 AI: {ai.advice_text}"
-                    bbox = draw_ov.textbbox((0, 0), coach_text, font=self.font)
-                    w_ai = bbox[2] - bbox[0]
-                    h_ai = bbox[3] - bbox[1]
-                    
+                    # Style based on interaction type
+                    if ai.interaction_type == "PROACTIVE_VOICE":
+                        coach_text = f"🔊 语音: {ai.advice_text}"
+                        outline_color = (100, 255, 100, 200) # Green for voice
+                        fill_color = (100, 255, 100, 255)
+                    else:
+                        coach_text = f"🤖 提示: {ai.advice_text}"
+                        outline_color = (255, 215, 0, 200) # Gold for popup
+                        fill_color = (255, 215, 0, 255)
+                        
+                    if self.ai_coach_message != coach_text:
+                        self.ai_coach_message = coach_text
+                        self.ai_coach_last_update = current_time
+                        
+                    time_since_update = current_time - self.ai_coach_last_update
                     y_ai = 100
-                    x_ai = max((w - w_ai) // 2, 10)
-                    draw_ov.rectangle([x_ai - 15, y_ai - 10, x_ai + w_ai + 15, y_ai + h_ai + 10], fill=(0, 0, 0, 180), outline=(255, 215, 0, 200), width=2)
-                    draw_ov.text((x_ai, y_ai), coach_text, font=self.font, fill=(255, 215, 0, 255))
+                    
+                    if level in ["COACH", "PRO"]:
+                        if time_since_update < 5.0:
+                            max_text_width = w - 40
+                            wrapped_coach_lines = []
+                            line = ""
+                            for char in coach_text:
+                                test_line = line + char
+                                bbox = draw_ov.textbbox((0,0), test_line, font=self.font)
+                                tw = bbox[2] - bbox[0]
+                                if tw > max_text_width and line != "":
+                                    wrapped_coach_lines.append(line)
+                                    line = char
+                                else:
+                                    line = test_line
+                            if line:
+                                wrapped_coach_lines.append(line)
+                            
+                            total_h_ai = len(wrapped_coach_lines) * 40
+                            
+                            max_w_ai = max([draw_ov.textbbox((0,0), l, font=self.font)[2] - draw_ov.textbbox((0,0), l, font=self.font)[0] for l in wrapped_coach_lines]) if wrapped_coach_lines else 0
+                            x_ai = max((w - max_w_ai) // 2, 10)
+                            
+                            draw_ov.rounded_rectangle([x_ai - 15, y_ai - 10, x_ai + max_w_ai + 15, y_ai + total_h_ai + 10], radius=10, fill=(0, 0, 0, 180), outline=outline_color, width=1)
+                            
+                            for i, l in enumerate(wrapped_coach_lines):
+                                draw_ov.text((x_ai, y_ai + i * 40), l, font=self.font, fill=fill_color)
+                        else:
+                            # Collapsed pill view
+                            collapsed_text = "💬 AI Insight (Tab)"
+                            bbox = draw_ov.textbbox((0,0), collapsed_text, font=self.small_font)
+                            cw = bbox[2] - bbox[0]
+                            ch = bbox[3] - bbox[1]
+                            x_ai = max((w - cw) // 2, 10)
+                            
+                            draw_ov.rounded_rectangle([x_ai - 10, y_ai - 5, x_ai + cw + 10, y_ai + ch + 5], radius=15, fill=(0, 0, 0, 150), outline=(200, 200, 200, 100), width=1)
+                            draw_ov.text((x_ai, y_ai), collapsed_text, font=self.small_font, fill=(200, 200, 200, 255))
+                    
+                    # T003: Render Ghost Composition Box
+                    target_box = getattr(ai, 'target_box', None)
+                    if target_box:
+                        tx1, ty1, tx2, ty2 = target_box
+                        if getattr(ai, 'perfect_alignment', False):
+                            # Solid golden border for perfect alignment "snap"
+                            draw_ov.rectangle([tx1, ty1, tx2, ty2], fill=(255, 215, 0, 40), outline=(255, 215, 0, 255), width=3)
+                            # Add "✨ ALIGNED" text below the box
+                            snap_text = "✨ ALIGNED"
+                            draw_ov.text((tx1 + (tx2-tx1)//2 - 40, ty2 + 10), snap_text, font=self.small_font, fill=(255, 215, 0, 255))
+                        else:
+                            # Semi-transparent fill with dashed-like border
+                            draw_ov.rectangle([tx1, ty1, tx2, ty2], fill=(255, 255, 255, 40), outline=(255, 255, 255, 180), width=2)
+                        
+                    # T004: Render Directional Arrows
+                    arrows = getattr(ai, 'directional_arrows', [])
+                    if arrows:
+                        arrow_map = {
+                            "LEFT": ("←", 30, h//2),
+                            "RIGHT": ("→", w - 60, h//2),
+                            "UP": ("↑", w//2, 80),
+                            "DOWN": ("↓", w//2, h - 120),
+                            "FORWARD": ("⇡", w//2 - 40, h//2),
+                            "BACKWARD": ("⇣", w//2 + 40, h//2)
+                        }
+                        for arrow in arrows:
+                            if arrow in arrow_map:
+                                symbol, ax, ay = arrow_map[arrow]
+                                draw_ov.rectangle([ax - 10, ay - 10, ax + 40, ay + 40], fill=(0, 0, 0, 150), outline=(200, 200, 200, 100), width=1)
+                                draw_ov.text((ax, ay), symbol, font=self.font, fill=(255, 255, 255, 255))
+                    
+            # Draw Scene Context
+            if getattr(analysis, 'current_scene_context', None):
+                ctx = analysis.current_scene_context
+                
+                # Use scene icons
+                st = self.scene_icons.get(ctx.scene_type, ctx.scene_type)
+                lc = self.scene_icons.get(ctx.lighting_condition, ctx.lighting_condition)
+                
+                active_tpl = getattr(getattr(analysis, 'ai_coaching', None), 'active_template', "Default")
+                scene_info = f"{st} | {lc} | Tpl: {active_tpl} | ISO {ctx.recommended_iso} | 1/{int(ctx.recommended_shutter*1000) if ctx.recommended_shutter and ctx.recommended_shutter < 1 else ctx.recommended_shutter}"
+                
+                # Top bar badge
+                bbox = draw_ov.textbbox((0,0), scene_info, font=self.small_font)
+                tw = bbox[2] - bbox[0]
+                th = bbox[3] - bbox[1]
+                
+                x_scene = max((w - tw) // 2, 10)
+                y_scene = 40
+                
+                draw_ov.rounded_rectangle([x_scene - 15, y_scene - 5, x_scene + tw + 15, y_scene + th + 5], radius=15, fill=(0, 0, 0, 150), outline=(200, 200, 200, 80), width=1)
+                draw_ov.text((x_scene, y_scene), scene_info, font=self.small_font, fill=(200, 255, 200, 255))
 
         # Update sidebar animation state
         target_offset = 0.0 if self.is_sidebar_open else 320.0
@@ -196,6 +345,21 @@ class OverlayRenderer:
             if not self.is_sidebar_open:
                 self.toggle_bounds.clear()
                 self.numeric_bounds.clear()
+
+        # Draw input box if in input mode
+        if self.input_mode:
+            input_text = f"向AI提问: {self.user_query}_"
+            bbox = draw_ov.textbbox((0, 0), input_text, font=self.font)
+            iw = bbox[2] - bbox[0]
+            ih = bbox[3] - bbox[1]
+            ix = max((w - iw) // 2, 20)
+            iy = h - ih - 50
+            draw_ov.rectangle([ix - 15, iy - 10, ix + iw + 15, iy + ih + 10], fill=(0, 0, 0, 200), outline=(200, 200, 255, 255), width=2)
+            draw_ov.text((ix, iy), input_text, font=self.font, fill=(255, 255, 255, 255))
+            
+            # Helper text
+            helper_text = "按 Enter 发送, Esc 取消"
+            draw_ov.text((ix, iy + ih + 15), helper_text, font=self.small_font, fill=(150, 150, 150, 255))
 
         # Composite the UI layer over the image
         img_pil = Image.alpha_composite(img_pil, ui_overlay).convert('RGB')

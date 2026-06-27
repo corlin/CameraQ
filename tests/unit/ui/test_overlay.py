@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 from src.ui.overlay import OverlayRenderer
-from src.core.entities import AnalysisResult
+from src.core.entities import AnalysisResult, CompositionScore
 
 def test_overlay_renderer():
     renderer = OverlayRenderer()
@@ -12,7 +12,7 @@ def test_overlay_renderer():
     result = AnalysisResult(
         image_with_overlays=img,
         feedback_message="测试反馈: 向左移动",
-        score=85.0,
+        score=CompositionScore(total_score=85, subject_score=80, structure_score=90, balance_score=85, interference_score=90, style_score=80),
         recommended_crops=[]
     )
     

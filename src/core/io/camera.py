@@ -15,6 +15,7 @@ class CameraStreamManager:
         self._lock = threading.Lock()
         self._thread = None
         self.fps = 0.0
+        self.software_exposure_compensation = 0.0
 
     def start(self):
         self.cap = cv2.VideoCapture(self.source)
@@ -26,6 +27,22 @@ class CameraStreamManager:
         self._thread = threading.Thread(target=self._update, daemon=True)
         self._thread.start()
         return True
+
+    def set_exposure(self, exposure_val: float):
+        if self.cap:
+            success = self.cap.set(cv2.CAP_PROP_EXPOSURE, exposure_val)
+            if not success:
+                logger.debug("Hardware exposure control not supported, using software fallback.")
+                # Simple mapping: exposure_val (e.g. -2.0 to 2.0) -> compensation
+                self.software_exposure_compensation = max(-2.0, min(2.0, exposure_val))
+        else:
+            self.software_exposure_compensation = max(-2.0, min(2.0, exposure_val))
+
+    def set_iso(self, iso_val: int):
+        if self.cap:
+            success = self.cap.set(cv2.CAP_PROP_ISO_SPEED, iso_val)
+            if not success:
+                logger.debug("Hardware ISO control not supported.")
 
     def _update(self):
         frame_count = 0
@@ -58,7 +75,12 @@ class CameraStreamManager:
     def read(self) -> Optional[Any]:
         with self._lock:
             if self.current_frame is not None:
-                return self.current_frame.copy()
+                frame = self.current_frame.copy()
+                if self.software_exposure_compensation != 0.0:
+                    alpha = 1.0 + (self.software_exposure_compensation * 0.2)
+                    beta = self.software_exposure_compensation * 30.0
+                    frame = cv2.convertScaleAbs(frame, alpha=alpha, beta=beta)
+                return frame
             return None
 
     def stop(self):

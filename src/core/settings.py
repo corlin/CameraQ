@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import threading
 from pathlib import Path
 from typing import Dict, Any
@@ -27,6 +28,7 @@ class SettingsManager:
         "analysis_throttle_n": 5,         # run expensive analysis every N frames
         # Display options
         "overlay_opacity": 0.7,           # 0.0–1.0
+        "coaching_level": "COACH",        # OFF, MINIMAL, COACH, PRO
     }
 
     def __init__(self, config_path: str = None):
@@ -36,6 +38,8 @@ class SettingsManager:
         # Initialize all settings with defaults
         for key, default_val in self._DEFAULTS.items():
             setattr(self, key, default_val)
+        
+        self.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
         
         # Load from disk if available
         self.load()
@@ -57,6 +61,8 @@ class SettingsManager:
                             elif isinstance(default_val, float) and isinstance(val, (int, float)):
                                 setattr(self, key, float(val))
                             elif isinstance(default_val, int) and isinstance(val, int):
+                                setattr(self, key, val)
+                            elif isinstance(default_val, str) and isinstance(val, str):
                                 setattr(self, key, val)
                             else:
                                 logger.warning(f"Invalid type for setting '{key}' in config, using default")
@@ -111,6 +117,19 @@ class SettingsManager:
             elif setting_name == "analysis_throttle_n":
                 new_val = max(1, min(15, int(new_val)))
             setattr(self, setting_name, new_val)
+        self.save()
+
+    def cycle_coaching_level(self) -> None:
+        """Cycle through the CoachingLevel states."""
+        with self._lock:
+            levels = ["OFF", "MINIMAL", "COACH", "PRO"]
+            current_val = getattr(self, "coaching_level", "COACH")
+            if current_val in levels:
+                idx = levels.index(current_val)
+                new_val = levels[(idx + 1) % len(levels)]
+            else:
+                new_val = "COACH"
+            setattr(self, "coaching_level", new_val)
         self.save()
 
     def get(self, setting_name: str):

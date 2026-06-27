@@ -10,7 +10,7 @@ from PIL import Image
 from typing import Optional
 from google import genai
 
-from .entities import AICoachingResult
+from .entities import AICoachingResult, InteractionType
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ class AICoach:
                 pass
             self.worker_thread.join(timeout=1.0)
 
-    def enqueue_frame(self, frame: np.ndarray, force: bool = False):
+    def enqueue_frame(self, frame: np.ndarray, force: bool = False, query: Optional[str] = None):
         """
         Attempts to enqueue a frame for background processing.
         If the queue is full (i.e. the worker is busy), the frame is dropped
@@ -66,10 +66,10 @@ class AICoach:
                 self.frame_queue.get_nowait()
             except queue.Empty:
                 pass
-            self.frame_queue.put(frame.copy())
+            self.frame_queue.put((frame.copy(), query))
         else:
             try:
-                self.frame_queue.put_nowait(frame.copy())
+                self.frame_queue.put_nowait((frame.copy(), query))
             except queue.Full:
                 # Worker is busy, just drop the frame
                 pass
@@ -89,7 +89,12 @@ class AICoach:
 
         while not self._stop_event.is_set():
             try:
-                frame = self.frame_queue.get(timeout=1.0)
+                item = self.frame_queue.get(timeout=1.0)
+                if isinstance(item, tuple):
+                    frame, query = item
+                else:
+                    frame = item
+                    query = None
             except queue.Empty:
                 continue
 
@@ -109,12 +114,19 @@ class AICoach:
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             pil_image = Image.fromarray(rgb_frame)
 
+            if query:
+                prompt_to_use = f"You are a professional photography coach. The user asks: '{query}'. Look at this camera frame and provide a short (1-2 sentences) helpful answer directly in Chinese, without quotes or conversational filler."
+                interaction_type = "CHAT"
+            else:
+                prompt_to_use = prompt
+                interaction_type = "PROACTIVE_VOICE"
+
             try:
                 logger.info(f"Calling Gemini {self.model_name} with {pil_image.width}x{pil_image.height} image...")
                 start_time = time.time()
                 response = self.client.models.generate_content(
                     model=self.model_name,
-                    contents=[prompt, pil_image]
+                    contents=[prompt_to_use, pil_image]
                 )
                 elapsed = time.time() - start_time
                 
@@ -123,7 +135,8 @@ class AICoach:
                 self.latest_advice = AICoachingResult(
                     advice_text=advice_text,
                     timestamp=time.time(),
-                    is_error=False
+                    is_error=False,
+                    interaction_type=interaction_type
                 )
                 self.consecutive_errors = 0  # Reset on success
             except Exception as e:

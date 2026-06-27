@@ -26,3 +26,25 @@ def test_camera_stream_manager():
     finally:
         manager.stop()
         assert not manager.is_running
+
+def test_camera_software_exposure():
+    camera = CameraStreamManager(source=0)
+    
+    # Fake a frame
+    fake_frame = np.ones((100, 100, 3), dtype=np.uint8) * 100
+    camera.current_frame = fake_frame
+    
+    # Test setting exposure
+    camera.set_exposure(1.0)
+    assert camera.software_exposure_compensation == 1.0
+    
+    # Read frame and verify it's brighter
+    frame = camera.read()
+    assert frame is not None
+    assert frame.mean() > 100
+    
+    # Test negative exposure
+    camera.set_exposure(-1.0)
+    assert camera.software_exposure_compensation == -1.0
+    frame = camera.read()
+    assert frame.mean() < 100

@@ -1,0 +1,32 @@
+{
+  "type": "object",
+  "properties": {
+    "scene_type": {
+      "type": "string",
+      "description": "The primary subject or context of the scene (e.g. Portrait, Macro, Action, Landscape)"
+    },
+    "lighting_condition": {
+      "type": "string",
+      "description": "Description of lighting (e.g. Backlit, Low Light, Even)"
+    },
+    "recommended_iso": {
+      "type": "integer",
+      "description": "The suggested ISO value (e.g. 100, 400, 800)"
+    },
+    "recommended_shutter": {
+      "type": "string",
+      "description": "The suggested shutter speed string (e.g. '1/250', '1/30')"
+    },
+    "proactive_advice": {
+      "type": "string",
+      "description": "A short, actionable sentence to speak to the user. E.g., 'Try moving left to avoid the sun glare.'"
+    }
+  },
+  "required": [
+    "scene_type",
+    "lighting_condition",
+    "recommended_iso",
+    "recommended_shutter",
+    "proactive_advice"
+  ]
+}

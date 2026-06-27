@@ -8,6 +8,7 @@ CameraQ is an intelligent photography assistant designed to analyze image compos
 - 🤖 **Generative AI Coaching**: Integrates Gemini 2.5 Flash for contextual, stylistic, and emotional photography tips directly from the viewfinder.
 - 👁️ **Advanced Computer Vision**: Leverages YOLO11 for object and human pose detection, alongside visual saliency mapping to identify the natural focal points of an image.
 - 📐 **Dynamic Aesthetic Rules**: Automatically detects rule-of-thirds alignment, horizon leveling, color harmony, over/under exposure, and background interference.
+- 🎯 **Progressive Alignment & Clutter Detection**: Real-time IoU-based alignment "snap" for perfect composition and background clutter tracking via edge density analysis.
 - ⚙️ **Pro Settings Dashboard**: Interactive sliding side panel with granular control over AI sampling rates, analysis throttling to optimize FPS, and module toggles.
 
 ## Roadmap
@@ -18,6 +19,7 @@ CameraQ is an intelligent photography assistant designed to analyze image compos
 - [x] **Stage 4 (Generative AI Guide)**: Gemini multimodal integration for contextual, stylistic photography coaching.
 - [x] **Stage 5 (UI/UX Polish)**: Translucent, elegant visual overlays with dynamic AI prompt lifecycles.
 - [x] **Stage 6 (Pro Optimization)**: Multi-dimensional scoring (5-axis radar), performance throttling (FPS > 25), sliding settings sidebar, and graceful API degradation.
+- [x] **Stage 7 (Progressive Alignment & UX Levels)**: Implemented 4-tier coaching levels, Canny edge background clutter detection, and real-time IoU-based haptic alignment snapping.
 
 ## Running the App
 

@@ -12,6 +12,13 @@ class ActionType(str, Enum):
     ROTATE = "Rotate"
     NONE = "None"
 
+class CoachingLevel(str, Enum):
+    OFF = "OFF"
+    MINIMAL = "MINIMAL"
+    COACH = "COACH"
+    PRO = "PRO"
+
+
 class PriorityLevel(int, Enum):
     HARD_ERROR = 1
     SUBJECT = 2
@@ -92,7 +99,10 @@ class AestheticsMetrics(BaseModel):
     brightness_level: float = 0.0
     is_overexposed: bool = False
     is_underexposed: bool = False
+    is_severe_backlight: bool = False
     color_harmony_score: float = 1.0
+    background_clutter_score: float = 0.0
+    is_background_cluttered: bool = False
     lighting_feedback: str = ""
 
 class TrackedSubject(DetectedSubject):
@@ -108,9 +118,34 @@ class AICoachingResult(BaseModel):
     timestamp: float = 0.0
     duration: float = 10.0
     is_error: bool = False
+    interaction_type: str = "PROACTIVE_POPUP"
+    target_box: Optional[Tuple[int, int, int, int]] = None
+    directional_arrows: List[str] = Field(default_factory=list)
+    active_template: str = "Default"
+    perfect_alignment: bool = False
 
     def is_active(self, current_time: float) -> bool:
         return (current_time - self.timestamp) <= self.duration
+
+class InteractionType(str, Enum):
+    PROACTIVE_VOICE = "PROACTIVE_VOICE"
+    PROACTIVE_POPUP = "PROACTIVE_POPUP"
+    REACTIVE_CHAT = "REACTIVE_CHAT"
+
+class AIInteraction(BaseModel):
+    timestamp: float
+    message: str
+    type: InteractionType
+    acknowledged: bool = False
+
+class SceneContext(BaseModel):
+    scene_type: str = ""
+    lighting_condition: str = ""
+    recommended_iso: int = 0
+    recommended_shutter: str = ""
+    proactive_advice: str = ""
+    confidence: float = 0.0
+    timestamp: float = 0.0
 
 class AnalysisResult(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
@@ -123,4 +158,6 @@ class AnalysisResult(BaseModel):
     tracked_subjects: List[TrackedSubject] = Field(default_factory=list)
     shutter_opportunity: bool = False
     ai_coaching: Optional[AICoachingResult] = None
+    current_scene_context: Optional[SceneContext] = None
+    active_interactions: List[AIInteraction] = Field(default_factory=list)
     debug_data: dict = Field(default_factory=dict)
