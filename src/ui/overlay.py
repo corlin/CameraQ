@@ -315,7 +315,7 @@ class OverlayRenderer:
                 lc = self.scene_icons.get(ctx.lighting_condition, ctx.lighting_condition)
                 
                 active_tpl = getattr(getattr(analysis, 'ai_coaching', None), 'active_template', "Default")
-                scene_info = f"{st} | {lc} | Tpl: {active_tpl} | ISO {ctx.recommended_iso} | 1/{int(ctx.recommended_shutter*1000) if ctx.recommended_shutter and ctx.recommended_shutter < 1 else ctx.recommended_shutter}"
+                scene_info = f"{st} | {lc} | Tpl: {active_tpl} | ISO {ctx.recommended_iso} | Shutter: {ctx.recommended_shutter}"
                 
                 # Top bar badge
                 bbox = draw_ov.textbbox((0,0), scene_info, font=self.small_font)
