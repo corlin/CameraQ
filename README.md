@@ -20,6 +20,7 @@ CameraQ is an intelligent photography assistant designed to analyze image compos
 - [x] **Stage 5 (UI/UX Polish)**: Translucent, elegant visual overlays with dynamic AI prompt lifecycles.
 - [x] **Stage 6 (Pro Optimization)**: Multi-dimensional scoring (5-axis radar), performance throttling (FPS > 25), sliding settings sidebar, and graceful API degradation.
 - [x] **Stage 7 (Progressive Alignment & UX Levels)**: Implemented 4-tier coaching levels, Canny edge background clutter detection, and real-time IoU-based haptic alignment snapping.
+- [x] **Stage 13 (Advanced Photography Heuristics)**: Implemented fast (<15ms) lighting direction, EV warnings via histograms, color contrast checks, leading lines, and dynamic DoF blurring advice using classical CV techniques.
 
 ## Running the App
 

@@ -35,6 +35,32 @@ def test_process_frame_latency():
     assert max_latency < 0.1, f"Max local processing latency {max_latency:.3f}s exceeds UI blocking budget (0.1s)"
     assert avg_latency < 0.05, f"Average local processing latency {avg_latency:.3f}s is too high"
 
+def test_aesthetics_analyzer_latency():
+    """
+    Test that the AestheticsAnalyzer completes within the 15ms budget (0.015s).
+    """
+    from src.core.analyzers.aesthetics_analyzer import AestheticsAnalyzer
+    from src.core.entities import BoundingBox
+    
+    analyzer = AestheticsAnalyzer()
+    
+    # 1080p dummy frame
+    dummy_frame = np.random.randint(0, 256, (1080, 1920, 3), dtype=np.uint8)
+    primary_box = BoundingBox(x=800, y=400, width=300, height=500)
+    
+    # Warmup
+    for _ in range(5):
+        analyzer.analyze(dummy_frame, primary_box)
+        
+    latencies = []
+    for _ in range(50):
+        start_time = time.time()
+        analyzer.analyze(dummy_frame, primary_box)
+        latencies.append(time.time() - start_time)
+        
+    avg_latency = sum(latencies) / len(latencies)
+    assert avg_latency < 0.015, f"Average aesthetics processing latency {avg_latency*1000:.2f}ms exceeds budget (15ms)"
+
 def test_gemini_client_timeout_sla(monkeypatch):
     """
     Test that the GeminiClient adheres to a strict timeout for the Scene Analysis SLA (<2.0s).

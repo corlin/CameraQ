@@ -104,6 +104,10 @@ class AestheticsMetrics(BaseModel):
     background_clutter_score: float = 0.0
     is_background_cluttered: bool = False
     lighting_feedback: str = ""
+    histogram_clipping: Optional[str] = None
+    lighting_direction: Optional[str] = None
+    color_contrast_low: bool = False
+    vanishing_point_aligned: bool = False
 
 class TrackedSubject(DetectedSubject):
     track_id: int
