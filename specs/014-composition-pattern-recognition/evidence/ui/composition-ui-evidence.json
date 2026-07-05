@@ -1,0 +1,38 @@
+{
+  "uses_camera_frame": false,
+  "source": "deterministic synthetic UI validation scene",
+  "minimal": {
+    "composition_lines": 1,
+    "has_recommendation": true,
+    "evidence_lines": 1,
+    "evidence_points": 1,
+    "evidence_contours": 1
+  },
+  "coach": {
+    "composition_lines": 3,
+    "has_recommendation": true,
+    "evidence_lines": 1,
+    "evidence_points": 1,
+    "evidence_contours": 1
+  },
+  "pro": {
+    "composition_lines": 3,
+    "has_recommendation": true,
+    "evidence_lines": 1,
+    "evidence_points": 1,
+    "evidence_contours": 1
+  },
+  "disabled": {
+    "composition_lines": 0,
+    "has_recommendation": false
+  },
+  "sidebar": {
+    "composition_controls": [
+      "clear_composition_diagnostics",
+      "composition_analysis_interval_s_minus",
+      "composition_analysis_interval_s_plus",
+      "composition_detection_enabled",
+      "composition_diagnostics_enabled"
+    ]
+  }
+}

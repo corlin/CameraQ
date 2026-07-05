@@ -7,6 +7,28 @@ from src.core.entities import AnalysisResult
 from src.core.settings import SettingsManager
 
 class OverlayRenderer:
+    SETTINGS_TITLE = "Analysis Settings (TAB)"
+    SETTINGS_PROMPT = "Press TAB for Settings"
+    CLEAR_COMPOSITION_LABEL = "Clear Comp Logs"
+    COMPOSITION_INTERVAL_LABEL = "Comp Interval"
+    COMPOSITION_LABELS = {
+        "RULE_OF_THIRDS": "三分法",
+        "DYNAMIC_SYMMETRY": "动态对称",
+        "BALANCED": "平衡式",
+        "TRIANGLE": "三角形",
+        "DIAGONAL": "对角线",
+        "HORIZONTAL": "横线",
+        "OBLIQUE": "斜线",
+        "CURVE": "曲线",
+        "RADIAL": "放射式",
+        "CHECKERBOARD": "棋盘式",
+        "CENTRIPETAL": "向心式",
+        "TUNNEL": "隧道式",
+        "FRAME_WITHIN_FRAME": "框式",
+        "CROSS": "十字形",
+        "VERTICAL": "垂直线",
+    }
+
     def __init__(self, debounce_interval=0.3, settings: SettingsManager = None):
         # We use PIL for rendering text because cv2.putText does not support Chinese out of the box nicely
         self.debounce_interval = debounce_interval
@@ -17,6 +39,7 @@ class OverlayRenderer:
         self.sidebar_offset = 320.0 # start fully hidden
         self.toggle_bounds = {}
         self.numeric_bounds = {}
+        self.action_bounds = {}
         self.input_mode = False
         self.user_query = ""
         self.ai_coach_last_update = 0.0
@@ -102,6 +125,46 @@ class OverlayRenderer:
             lw = bbox[2] - bbox[0]
             draw_ov.rectangle([w//2 - lw//2 - 10, 10, w//2 + lw//2 + 10, 40], fill=(0, 0, 0, 150))
             draw_ov.text((w//2 - lw//2, 12), level_text, font=self.small_font, fill=(200, 200, 200, 255))
+
+            composition_lines = self._composition_summary(
+                getattr(analysis, "composition_analysis", None), level
+            )
+            if level in ("COACH", "PRO"):
+                recommendation_text = self._composition_recommendation_text(
+                    getattr(analysis, "composition_analysis", None)
+                )
+                if recommendation_text:
+                    composition_lines.append(recommendation_text)
+            if composition_lines:
+                y_composition = 48
+                widths = [draw_ov.textbbox((0, 0), line, font=self.small_font)[2] for line in composition_lines]
+                box_width = max(widths) + 20
+                box_height = len(composition_lines) * 27 + 10
+                draw_ov.rounded_rectangle(
+                    [10, y_composition, 10 + box_width, y_composition + box_height],
+                    radius=8,
+                    fill=(0, 0, 0, 150),
+                    outline=(255, 215, 0, 130),
+                    width=1,
+                )
+                for index, line in enumerate(composition_lines):
+                    draw_ov.text(
+                        (20, y_composition + 5 + index * 27),
+                        line,
+                        font=self.small_font,
+                        fill=(255, 230, 150, 255),
+                    )
+            if level == "PRO":
+                geometry = self._composition_evidence_geometry(
+                    getattr(analysis, "composition_analysis", None), w, h
+                )
+                for p1, p2 in geometry["lines"]:
+                    draw_ov.line([p1, p2], fill=(255, 215, 0, 150), width=2)
+                for x, y in geometry["points"]:
+                    draw_ov.ellipse([x - 4, y - 4, x + 4, y + 4], fill=(255, 215, 0, 210))
+                for contour in geometry["contours"]:
+                    if len(contour) >= 2:
+                        draw_ov.line(contour + [contour[0]], fill=(255, 215, 0, 120), width=2)
             
             # Draw subject bounding boxes and labels
             if level == "PRO" and hasattr(analysis, 'subjects') and analysis.subjects:
@@ -337,7 +400,7 @@ class OverlayRenderer:
             self._draw_sidebar(draw_ov, w, h)
             
         if self.sidebar_offset > 5.0:
-            prompt_text = "⚙️ Press TAB for Settings"
+            prompt_text = self.SETTINGS_PROMPT
             bbox = draw_ov.textbbox((0, 0), prompt_text, font=self.small_font)
             pw = bbox[2] - bbox[0]
             draw_ov.rectangle([w - pw - 20, 10, w - 10, 10 + 30], fill=(0, 0, 0, 150))
@@ -345,6 +408,7 @@ class OverlayRenderer:
             if not self.is_sidebar_open:
                 self.toggle_bounds.clear()
                 self.numeric_bounds.clear()
+                self.action_bounds.clear()
 
         # Draw input box if in input mode
         if self.input_mode:
@@ -365,6 +429,76 @@ class OverlayRenderer:
         img_pil = Image.alpha_composite(img_pil, ui_overlay).convert('RGB')
         return cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
 
+    def _composition_summary(self, composition, level: str) -> list[str]:
+        if composition is None or level == "OFF":
+            return []
+        if composition.insufficient_evidence:
+            return ["构图：证据不足"]
+        modes = list(composition.top_modes)
+        if level == "MINIMAL":
+            modes = modes[:1]
+        elif level in ("COACH", "PRO"):
+            modes = modes[:3]
+        else:
+            return []
+        by_mode = {result.mode: result for result in composition.mode_results}
+        lines = []
+        for mode in modes:
+            label = self.COMPOSITION_LABELS.get(mode.value, mode.value)
+            if level == "PRO":
+                item = by_mode[mode]
+                lines.append(f"构图：{label} {item.match_score:.0f} · {item.confidence.value}")
+            else:
+                lines.append(f"构图：{label}")
+        return lines
+
+    def _composition_recommendation_text(self, composition) -> Optional[str]:
+        if composition is None or composition.recommendation is None:
+            return None
+        recommendation = composition.recommendation
+        labels = {
+            "MOVE_LEFT": "向左",
+            "MOVE_RIGHT": "向右",
+            "TILT_UP": "向上",
+            "TILT_DOWN": "向下",
+            "ROTATE_CLOCKWISE": "顺时针旋转",
+            "ROTATE_COUNTERCLOCKWISE": "逆时针旋转",
+            "MOVE_CLOSER": "靠近",
+            "MOVE_BACK": "后退",
+            "KEEP": "保持",
+        }
+        action = labels.get(recommendation.action.value, recommendation.action.value)
+        mode = self.COMPOSITION_LABELS.get(
+            recommendation.target_mode.value, recommendation.target_mode.value
+        )
+        return f"建议：{action} · {mode}"
+
+    def _composition_evidence_geometry(self, composition, width: int, height: int):
+        geometry = {"points": [], "lines": [], "contours": []}
+        if composition is None:
+            return geometry
+        by_mode = {result.mode: result for result in composition.mode_results}
+        for mode in composition.top_modes:
+            item = by_mode.get(mode)
+            if item is None or not item.is_visible:
+                continue
+            for evidence in item.evidence:
+                geometry["points"].extend(
+                    (round(value.x * width), round(value.y * height)) for value in evidence.points
+                )
+                geometry["lines"].extend(
+                    (
+                        (round(value.p1.x * width), round(value.p1.y * height)),
+                        (round(value.p2.x * width), round(value.p2.y * height)),
+                    )
+                    for value in evidence.lines
+                )
+                if evidence.contour:
+                    geometry["contours"].append(
+                        [(round(value.x * width), round(value.y * height)) for value in evidence.contour]
+                    )
+        return geometry
+
     def _draw_sidebar(self, draw_ov, w, h):
         sidebar_w = 320
         sidebar_x = w - sidebar_w + int(self.sidebar_offset)
@@ -373,13 +507,14 @@ class OverlayRenderer:
         draw_ov.rectangle([sidebar_x, 0, w + int(self.sidebar_offset), h], fill=(0, 0, 0, 220))
         
         # Draw title
-        title = "🛠️ Analysis Settings (TAB)"
+        title = self.SETTINGS_TITLE
         draw_ov.text((sidebar_x + 15, 20), title, font=self.small_font, fill=(255, 255, 255, 255))
         draw_ov.line([(sidebar_x + 10, 55), (sidebar_x + sidebar_w - 10, 55)], fill=(100, 100, 100, 255), width=1)
         
         y_offset = 80
         self.toggle_bounds.clear()
         self.numeric_bounds.clear()
+        self.action_bounds.clear()
         
         # Group 1: Detection Toggles
         draw_ov.text((sidebar_x + 15, y_offset), "--- Detection Modules ---", font=self.small_font, fill=(150, 150, 150, 255))
@@ -388,7 +523,9 @@ class OverlayRenderer:
         toggles = [
             ("AI Coach", "ai_coach_enabled"),
             ("Pose Detection", "pose_detection_enabled"),
-            ("Saliency Detection", "saliency_enabled")
+            ("Saliency Detection", "saliency_enabled"),
+            ("Composition", "composition_detection_enabled"),
+            ("Composition Logs", "composition_diagnostics_enabled"),
         ]
         
         for label, key in toggles:
@@ -406,6 +543,15 @@ class OverlayRenderer:
             draw_ov.text((btn_x + 15, btn_y + 3), text, font=self.small_font, fill=(255, 255, 255, 255))
             self.toggle_bounds[key] = (btn_x, btn_y, btn_x + btn_w, btn_y + btn_h)
             y_offset += 50
+
+        clear_label = self.CLEAR_COMPOSITION_LABEL
+        draw_ov.text((sidebar_x + 20, y_offset), clear_label, font=self.small_font, fill=(200, 200, 200, 255))
+        clear_x = sidebar_x + sidebar_w - 90
+        draw_ov.rectangle([clear_x, y_offset - 2, clear_x + 70, y_offset + 28], fill=(100, 80, 20, 220))
+        draw_ov.text((clear_x + 12, y_offset + 2), "CLEAR", font=self.small_font, fill=(255, 255, 255, 255))
+        self.action_bounds["clear_composition_diagnostics"] = (clear_x, y_offset - 2, clear_x + 70, y_offset + 28)
+        y_offset += 50
+
             
         # Group 2: Performance Parameters
         y_offset += 10
@@ -414,7 +560,8 @@ class OverlayRenderer:
         
         numerics = [
             ("AI Interval (s)", "ai_sampling_interval", 1.0, "{:.1f}"),
-            ("Analysis Throttle", "analysis_throttle_n", 1, "{:d}")
+            ("Analysis Throttle", "analysis_throttle_n", 1, "{:d}"),
+            (self.COMPOSITION_INTERVAL_LABEL, "composition_analysis_interval_s", 0.05, "{:.2f}"),
         ]
         
         for label, key, delta, fmt in numerics:
@@ -474,4 +621,3 @@ class OverlayRenderer:
             draw_ov.rectangle([bar_x + 80, bar_y + 4, bar_x + 80 + bar_len, bar_y + 16], fill=color)
             
             bar_y += 20
-

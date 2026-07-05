@@ -1,4 +1,5 @@
 import time
+import os
 import pytest
 import numpy as np
 from src.core.analyzer import CameraQAnalyzer
@@ -60,6 +61,102 @@ def test_aesthetics_analyzer_latency():
         
     avg_latency = sum(latencies) / len(latencies)
     assert avg_latency < 0.015, f"Average aesthetics processing latency {avg_latency*1000:.2f}ms exceeds budget (15ms)"
+
+
+def test_composition_engine_latency():
+    from src.core.composition.engine import CompositionEngine
+
+    engine = CompositionEngine()
+    frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+    for x in range(0, 1280, 120):
+        frame[:, x : x + 3] = 255
+    engine.analyze(frame, [], None)
+    latencies = []
+    for _ in range(30):
+        start = time.perf_counter()
+        engine.analyze(frame, [], None)
+        latencies.append(time.perf_counter() - start)
+    average = sum(latencies) / len(latencies)
+    p95 = sorted(latencies)[int(len(latencies) * 0.95) - 1]
+    assert average < 0.025, f"Composition average {average*1000:.2f}ms exceeds 25ms"
+    assert p95 < 0.05, f"Composition p95 {p95*1000:.2f}ms is unexpectedly high"
+
+
+@pytest.mark.skipif(
+    os.getenv("CAMERAQ_RUN_SLOW_BENCHMARK") != "1",
+    reason="requires explicit 5-minute baseline-hardware run",
+)
+def test_five_minute_end_to_end_viewfinder_benchmark():
+    """Opt-in CPU-only analysis + overlay benchmark for named baseline hardware."""
+    from src.core.composition.engine import CompositionEngine
+    from src.core.entities import AnalysisResult, CompositionScore
+    from src.core.settings import SettingsManager
+    from src.ui.overlay import OverlayRenderer
+    import tempfile
+
+    duration = float(os.getenv("CAMERAQ_BENCHMARK_SECONDS", "300"))
+    frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+    frame[:, ::120] = 255
+    settings = SettingsManager(config_path=tempfile.NamedTemporaryFile(suffix=".json").name)
+    settings.ai_coach_enabled = False
+    settings.pose_detection_enabled = False
+    settings.object_detection_enabled = False
+    engine = CompositionEngine()
+    renderer = OverlayRenderer(settings=settings)
+    score = CompositionScore(
+        total_score=80,
+        subject_score=80,
+        structure_score=80,
+        balance_score=80,
+        interference_score=80,
+        style_score=80,
+    )
+    started = time.perf_counter()
+    last_frame = started
+    last_analysis = -1.0
+    intervals = []
+    control_latencies = []
+    analysis = None
+    analysis_count = 0
+    frame_count = 0
+    while time.perf_counter() - started < duration:
+        now = time.perf_counter()
+        if analysis is None or now - last_analysis >= 0.15:
+            analysis = engine.analyze(frame, [], None, timestamp=now)
+            last_analysis = now
+            analysis_count += 1
+        payload = AnalysisResult(
+            feedback_message="",
+            score=score,
+            composition_analysis=analysis,
+        )
+        renderer.draw(frame, payload, fps=30.0)
+        finished = time.perf_counter()
+        intervals.append(finished - last_frame)
+        last_frame = finished
+        frame_count += 1
+        if frame_count % 10 == 0:
+            control_start = time.perf_counter()
+            settings.toggle("composition_detection_enabled")
+            settings.toggle("composition_detection_enabled")
+            control_latencies.append(time.perf_counter() - control_start)
+
+    elapsed = time.perf_counter() - started
+    average_fps = frame_count / elapsed
+    analysis_hz = analysis_count / elapsed
+    p95_interval = sorted(intervals)[int(len(intervals) * 0.95) - 1]
+    p95_control = sorted(control_latencies)[int(len(control_latencies) * 0.95) - 1]
+    print(
+        "composition_benchmark "
+        f"duration_s={elapsed:.3f} frames={frame_count} analyses={analysis_count} "
+        f"average_fps={average_fps:.3f} analysis_hz={analysis_hz:.3f} "
+        f"p95_frame_interval_ms={p95_interval * 1000:.3f} "
+        f"p95_control_response_ms={p95_control * 1000:.3f}"
+    )
+    assert average_fps >= 25
+    assert analysis_hz >= 5
+    assert p95_interval <= 0.08
+    assert p95_control <= 0.1
 
 def test_gemini_client_timeout_sla(monkeypatch):
     """

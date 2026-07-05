@@ -18,6 +18,8 @@ from .rules.background_rule import analyze_background_interference
 from .rules.position_rule import analyze_position
 from .ai_coach import AICoach
 from .settings import SettingsManager
+from .composition.engine import CompositionEngine
+from .composition.diagnostics import CompositionDiagnostics
 import time
 import queue
 
@@ -34,6 +36,13 @@ class CameraQAnalyzer:
         self.saliency_detector = SaliencyDetector()
         self.aesthetics_analyzer = AestheticsAnalyzer()
         self.object_tracker = ObjectTracker()
+        self.composition_engine = CompositionEngine()
+        self.composition_diagnostics = CompositionDiagnostics(
+            enabled=getattr(self.settings, "composition_diagnostics_enabled", False)
+        )
+        self._composition_clock = time.monotonic
+        self._last_composition_time = None
+        self._cached_composition = None
         self.ai_coach = AICoach()
         self.ai_coach.start()
         
@@ -192,6 +201,32 @@ class CameraQAnalyzer:
 
         # Aesthetics analysis
         aesthetics_metrics = self.aesthetics_analyzer.analyze(img, primary_box)
+        composition_analysis = None
+        if getattr(self.settings, "composition_detection_enabled", True):
+            composition_now = self._composition_clock()
+            interval = max(
+                0.05, float(getattr(self.settings, "composition_analysis_interval_s", 0.15))
+            )
+            due = (
+                self._cached_composition is None
+                or self._last_composition_time is None
+                or composition_now - self._last_composition_time >= interval
+            )
+            if due:
+                self._last_composition_time = composition_now
+                try:
+                    self._cached_composition = self.composition_engine.analyze(
+                        img, subjects, saliency_map, timestamp=composition_now
+                    )
+                    self.composition_diagnostics.enabled = getattr(
+                        self.settings, "composition_diagnostics_enabled", False
+                    )
+                    self.composition_diagnostics.add(self._cached_composition)
+                except Exception as exc:
+                    import logging
+
+                    logging.getLogger(__name__).warning("Composition analysis failed: %s", exc)
+            composition_analysis = self._cached_composition
         
         # Combine text feedback
         feedback_str = f"得分: {score.total_score}/100. 主要目标: {primary_subject_name}。\n{horizon_text}。"
@@ -264,6 +299,7 @@ class CameraQAnalyzer:
             shutter_opportunity=shutter_opportunity,
             ai_coaching=ai_coaching,
             current_scene_context=self._cached_scene_context,
+            composition_analysis=composition_analysis,
             debug_data={"num_subjects": len(subjects), "num_poses": len(pose_subjects)}
         )
         
@@ -277,6 +313,9 @@ class CameraQAnalyzer:
                 result.feedback_message += f"\n🤖 AI洞察: {fb.message}"
                 
         return result
+
+    def clear_composition_diagnostics(self):
+        self.composition_diagnostics.clear()
 
     def force_analyze(self, frame: np.ndarray, query: Optional[str] = None):
         """Forces the AI coach to analyze the current frame, overriding the queue."""

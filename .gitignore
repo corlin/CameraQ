@@ -1,9 +1,16 @@
 __pycache__/
 *.pyc
+.pytest_cache/
+.coverage
+coverage/
+.DS_Store
+*.log
+.env*
 .venv/
 venv/
 dist/
 *.egg-info/
 .gemini/
+.superpowers/
 config.json
 *.pt

@@ -23,9 +23,12 @@ class SettingsManager:
         "pose_detection_enabled": True,
         "saliency_enabled": True,
         "object_detection_enabled": True,
+        "composition_detection_enabled": True,
+        "composition_diagnostics_enabled": False,
         # Performance parameters
         "ai_sampling_interval": 5.0,     # seconds between AI Coach calls
         "analysis_throttle_n": 5,         # run expensive analysis every N frames
+        "composition_analysis_interval_s": 0.15,
         # Display options
         "overlay_opacity": 0.7,           # 0.0–1.0
         "coaching_level": "COACH",        # OFF, MINIMAL, COACH, PRO
@@ -116,6 +119,8 @@ class SettingsManager:
                 new_val = max(2.0, min(30.0, new_val))
             elif setting_name == "analysis_throttle_n":
                 new_val = max(1, min(15, int(new_val)))
+            elif setting_name == "composition_analysis_interval_s":
+                new_val = max(0.05, min(1.0, float(new_val)))
             setattr(self, setting_name, new_val)
         self.save()
 

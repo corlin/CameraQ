@@ -98,6 +98,14 @@
 - **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
 - **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
 
+### Quality, Privacy, and Validation Requirements
+
+- **QR-001**: System MUST define the offline behavior and any optional network degradation path.
+- **QR-002**: System MUST define measurable latency, update-frequency, and end-to-end responsiveness targets on named baseline hardware.
+- **QR-003**: System MUST define whether raw frames or structured diagnostics are retained, including opt-in, location, retention, and deletion behavior.
+- **QR-004**: User-facing scores and confidence terms MUST define their evidence, calibration status, and abstention behavior.
+- **QR-005**: Each visual rule MUST have reproducible positive, boundary, hard-negative, and degraded-input acceptance evidence.
+
 ### Key Entities *(include if feature involves data)*
 
 - **[Entity 1]**: [What it represents, key attributes without implementation]

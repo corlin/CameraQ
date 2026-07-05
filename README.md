@@ -11,6 +11,32 @@ CameraQ is an intelligent photography assistant designed to analyze image compos
 - 🎯 **Progressive Alignment & Clutter Detection**: Real-time IoU-based alignment "snap" for perfect composition and background clutter tracking via edge density analysis.
 - ⚙️ **Pro Settings Dashboard**: Interactive sliding side panel with granular control over AI sampling rates, analysis throttling to optimize FPS, and module toggles.
 
+## Offline composition recognition
+
+CameraQ can analyze composition locally with OpenCV/NumPy rules. The real-time path does not upload
+frames and does not require Gemini or another network service. It evaluates 15 non-exclusive modes:
+
+- rule of thirds, dynamic symmetry, balanced, triangle;
+- diagonal, horizontal, oblique, vertical, and cross;
+- curve, radial, checkerboard, centripetal, tunnel, and frame-within-frame.
+
+The displayed number is a deterministic **match score** (evidence score), not a statistical probability.
+Up to three stable modes are shown at once. When local evidence is weak, CameraQ lowers confidence,
+shows that evidence is insufficient, and suppresses directional advice instead of forcing a label.
+
+Coaching levels control information density:
+
+- `MINIMAL`: the strongest stable composition name;
+- `COACH`: Top 3 modes and at most one reachable camera action;
+- `PRO`: match score, confidence, and localized point/line/contour evidence.
+
+The settings sidebar contains separate controls for composition recognition and composition diagnostics,
+plus a clear-diagnostics action. Diagnostics always keep at most 300 structured results in memory. Disk
+logging is off by default; when explicitly enabled it writes NDJSON under
+`~/.cameraq/diagnostics/composition/`, never stores raw frames, rotates each file at 20 MB, retains files
+for at most seven days, and can be cleared from the sidebar. Disabling composition recognition removes
+only its overlay and leaves the viewfinder and capture operations available.
+
 ## Roadmap
 
 - [x] **Stage 1 (Offline MVP)**: Process local images with basic Saliency & YOLO detection, and output static compositional score/feedback.
@@ -21,6 +47,7 @@ CameraQ is an intelligent photography assistant designed to analyze image compos
 - [x] **Stage 6 (Pro Optimization)**: Multi-dimensional scoring (5-axis radar), performance throttling (FPS > 25), sliding settings sidebar, and graceful API degradation.
 - [x] **Stage 7 (Progressive Alignment & UX Levels)**: Implemented 4-tier coaching levels, Canny edge background clutter detection, and real-time IoU-based haptic alignment snapping.
 - [x] **Stage 13 (Advanced Photography Heuristics)**: Implemented fast (<15ms) lighting direction, EV warnings via histograms, color contrast checks, leading lines, and dynamic DoF blurring advice using classical CV techniques.
+- [x] **Stage 14 (Offline Composition Recognition)**: Implemented local multi-label recognition for 15 composition modes, stable Top 3 evidence, reachable camera-action guidance, privacy-bounded diagnostics, and independent performance gating.
 
 ## Running the App
 

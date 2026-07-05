@@ -80,6 +80,7 @@ def main():
                 # Copy bounds to prevent dictionary changed size during iteration error
                 toggles = list(renderer.toggle_bounds.items())
                 numerics = list(renderer.numeric_bounds.items())
+                actions = list(renderer.action_bounds.items())
                 
                 for key, (bx1, by1, bx2, by2) in toggles:
                     if bx1 <= x <= bx2 and by1 <= y <= by2:
@@ -88,6 +89,11 @@ def main():
                 for key, (bx1, by1, bx2, by2, base_key, delta) in numerics:
                     if bx1 <= x <= bx2 and by1 <= y <= by2:
                         settings.adjust(base_key, delta)
+                        return
+                for key, (bx1, by1, bx2, by2) in actions:
+                    if bx1 <= x <= bx2 and by1 <= y <= by2:
+                        if key == "clear_composition_diagnostics":
+                            analyzer.clear_composition_diagnostics()
                         return
 
     cv2.setMouseCallback("CameraQ Real-time Viewfinder", mouse_callback)

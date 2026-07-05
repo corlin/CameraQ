@@ -1,5 +1,4 @@
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
-at specs/013-advanced-photography-heuristics/plan.md
+For the current feature's technologies, project structure, commands, and
+implementation boundaries, read `specs/014-composition-pattern-recognition/plan.md`.
 <!-- SPECKIT END -->
