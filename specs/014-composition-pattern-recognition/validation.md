@@ -298,6 +298,17 @@ Camera started. Press 'q' to quit, 'TAB' for settings.
 Computer Use 无法读取或点击，盲按键不作为验收证据。因此 MINIMAL/COACH/PRO 键盘切换、侧栏开关
 和指定三分/线性/框式/隧道实景仍需人工操作验收。
 
+2026-07-10 按当前启动链路再次执行：
+
+```text
+uv run python scripts/capture_live_instance.py /private/tmp/cameraq-live-final.png --warmup-seconds 1
+GEMINI_API_KEY is not set. Deep AI features will be disabled.
+```
+
+输出图像尺寸为 1920×1080，像素范围为 0–255、均值约 39.25；目视检查确认包含实时场景、FPS、
+构图 Top 3、主体框、证据线和推荐信息。该结果证明摄像头预热、延迟模型导入和生产 Overlay 路径
+均能输出非黑画面；文件仅保存在临时目录，不纳入仓库。
+
 为固定可视化证据，新增 `scripts/render_composition_ui_evidence.py`，使用不含摄像头内容的确定性
 1280×720 合成场景输出 MINIMAL、COACH、PRO、关闭构图和侧栏五种状态，文件保存在
 `evidence/ui/`。对应 JSON 证明 MINIMAL 仅 1 行、COACH/PRO 各 3 行、COACH 有单条推荐、PRO 有点/线/
