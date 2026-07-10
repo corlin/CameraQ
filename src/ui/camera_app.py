@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 import time
 import threading
 import sys
@@ -16,6 +17,18 @@ from src.core.settings import SettingsManager
 logging.basicConfig(level=logging.INFO, format='[%(name)s] %(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
+WINDOW_NAME = "CameraQ Real-time Viewfinder"
+
+
+def _status_frame(message: str, width: int = 960, height: int = 540) -> np.ndarray:
+    """Render a visible status page while camera/models are starting."""
+    frame = np.zeros((height, width, 3), dtype=np.uint8)
+    cv2.putText(frame, "CameraQ", (40, 90), cv2.FONT_HERSHEY_SIMPLEX, 1.4,
+                (0, 210, 255), 2, cv2.LINE_AA)
+    cv2.putText(frame, message, (40, 160), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
+                (235, 235, 235), 2, cv2.LINE_AA)
+    return frame
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="CameraQ Real-time Viewfinder")
@@ -24,15 +37,25 @@ def main():
 
     logger.info("Starting CameraQ Real-time Viewfinder...")
     stream = CameraStreamManager(source=0)
+
+    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_AUTOSIZE)
+    cv2.imshow(WINDOW_NAME, _status_frame("正在打开摄像头..."))
+    cv2.waitKey(1)
     
     if not stream.start():
-        logger.warning("Failed to start camera stream.")
+        message = stream.last_error or "摄像头不可用；请在系统设置中允许当前终端/IDE访问摄像头。"
+        logger.error(message)
+        cv2.imshow(WINDOW_NAME, _status_frame(message))
+        cv2.waitKey(1800)
+        cv2.destroyAllWindows()
         return
 
     settings = SettingsManager()
     if args.deep_ai_enabled:
         settings.ai_coach_enabled = True
         
+    cv2.imshow(WINDOW_NAME, _status_frame("正在加载本地视觉模型，请稍候..."))
+    cv2.waitKey(1)
     analyzer = CameraQAnalyzer(settings=settings)
     renderer = OverlayRenderer(settings=settings)
     
@@ -59,13 +82,11 @@ def main():
     analysis_thread = threading.Thread(target=analysis_worker, daemon=True)
     analysis_thread.start()
 
-    cv2.namedWindow("CameraQ Real-time Viewfinder", cv2.WINDOW_AUTOSIZE)
-    
     def mouse_callback(event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONDOWN:
             # Handle potential Retina/DPI scaling by mapping coordinates
             try:
-                rect = cv2.getWindowImageRect("CameraQ Real-time Viewfinder")
+                rect = cv2.getWindowImageRect(WINDOW_NAME)
                 if rect[2] > 0 and hasattr(renderer, 'last_frame_size'):
                     fw, fh = renderer.last_frame_size
                     dw, dh = rect[2], rect[3]
@@ -96,7 +117,7 @@ def main():
                             analyzer.clear_composition_diagnostics()
                         return
 
-    cv2.setMouseCallback("CameraQ Real-time Viewfinder", mouse_callback)
+    cv2.setMouseCallback(WINDOW_NAME, mouse_callback)
 
     logger.info("Camera started. Press 'q' to quit, 'TAB' for settings.")
     logger.info("Press 'i' to ask the AI coach a specific question.")
@@ -143,7 +164,10 @@ def main():
                     last_alignment_state = False
                     
                 display_frame = renderer.draw(frame, current_analysis, fps=stream.fps)
-                cv2.imshow("CameraQ Real-time Viewfinder", display_frame)
+                cv2.imshow(WINDOW_NAME, display_frame)
+            else:
+                message = stream.last_error or "正在等待摄像头帧..."
+                cv2.imshow(WINDOW_NAME, _status_frame(message))
                 
             key = cv2.waitKey(1)
             if key != -1:

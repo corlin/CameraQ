@@ -15,12 +15,19 @@ class CameraStreamManager:
         self._lock = threading.Lock()
         self._thread = None
         self.fps = 0.0
+        self.last_error = ""
+        self._warmup_frames = 3
         self.software_exposure_compensation = 0.0
 
     def start(self):
+        self.last_error = ""
+        self._warmup_frames = 3
         self.cap = cv2.VideoCapture(self.source)
         if not self.cap.isOpened():
-            logger.warning(f"Warning: Could not open camera source {self.source}")
+            self.last_error = f"无法打开摄像头源 {self.source}；请检查系统摄像头权限。"
+            logger.warning(self.last_error)
+            self.cap.release()
+            self.cap = None
             return False
             
         self.is_running = True
@@ -60,6 +67,9 @@ class CameraStreamManager:
                 break
                 
             if ret:
+                if self._warmup_frames > 0:
+                    self._warmup_frames -= 1
+                    continue
                 with self._lock:
                     self.current_frame = frame
                 
