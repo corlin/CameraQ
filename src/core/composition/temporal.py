@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from src.core.entities import CompositionConfidence, CompositionMode, CompositionModeResult
 
-from .thresholds import enter_score, exit_score
+from .thresholds import display_enter_score, display_exit_score, enter_score, exit_score
 
 
 @dataclass
@@ -38,13 +38,27 @@ class CompositionTemporalFilter:
             record = self.records[item.mode]
             enter_threshold = enter_score(item.mode)
             exit_threshold = exit_score(item.mode)
+            display_threshold = display_enter_score(item.mode)
+            display_exit_threshold = display_exit_score(item.mode)
             high_evidence = item.confidence is CompositionConfidence.HIGH
-            if first_frame and high_evidence and item.match_score >= enter_threshold:
+            display_evidence = (
+                high_evidence
+                and item.match_score >= enter_threshold
+            ) or (
+                item.confidence is CompositionConfidence.MEDIUM
+                and item.match_score >= display_threshold
+            )
+            if first_frame and display_evidence:
                 record.state = "ACTIVE"
                 record.state_since = timestamp
                 record.above_enter_count = 3
             elif record.state == "ACTIVE":
-                if item.match_score < exit_threshold:
+                active_exit_threshold = (
+                    exit_threshold
+                    if high_evidence
+                    else display_exit_threshold
+                )
+                if item.match_score < active_exit_threshold:
                     record.below_exit_count += 1
                     if record.below_exit_count >= 3:
                         record.state = "ABSENT"
@@ -52,14 +66,18 @@ class CompositionTemporalFilter:
                         record.above_enter_count = 0
                 else:
                     record.below_exit_count = 0
-            elif high_evidence and item.match_score >= enter_threshold:
+            elif display_evidence and (
+                high_evidence and item.match_score >= enter_threshold
+                or item.confidence is CompositionConfidence.MEDIUM
+                and item.match_score >= display_threshold
+            ):
                 record.state = "CANDIDATE"
                 record.above_enter_count += 1
                 record.below_exit_count = 0
                 if record.above_enter_count >= 3:
                     record.state = "ACTIVE"
                     record.state_since = timestamp
-            elif item.match_score < exit_threshold:
+            elif item.match_score < min(exit_threshold, display_exit_threshold):
                 record.state = "ABSENT"
                 record.above_enter_count = 0
                 record.below_exit_count = 0

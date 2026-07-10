@@ -38,7 +38,7 @@ class CompositionRecommender:
         candidates = [
             item
             for item in mode_results
-            if item.mode in self.ACTIONABLE and item.confidence is not CompositionConfidence.LOW
+            if item.mode in self.ACTIONABLE and item.confidence is CompositionConfidence.HIGH
         ]
         if not candidates:
             return None

@@ -3,8 +3,12 @@ from types import SimpleNamespace
 from src.core.composition.scorers.common import confidence_for
 from src.core.composition.thresholds import (
     MODE_EVIDENCE_WEIGHTS,
+    MODE_DISPLAY_ENTER_SCORES,
+    MODE_DISPLAY_EXIT_SCORES,
     MODE_ENTER_SCORES,
     MODE_EXIT_SCORES,
+    display_enter_score,
+    display_exit_score,
     enter_score,
     exit_score,
     evidence_weight,
@@ -15,8 +19,11 @@ from src.core.entities import CompositionConfidence, CompositionMode
 def test_mode_thresholds_cover_contract_and_keep_hysteresis_gap():
     assert set(MODE_ENTER_SCORES) == set(CompositionMode)
     assert set(MODE_EXIT_SCORES) == set(CompositionMode)
+    assert set(MODE_DISPLAY_ENTER_SCORES) == set(CompositionMode)
+    assert set(MODE_DISPLAY_EXIT_SCORES) == set(CompositionMode)
     for mode in CompositionMode:
         assert 0 <= exit_score(mode) < enter_score(mode) <= 100
+        assert 0 <= display_exit_score(mode) < display_enter_score(mode) <= 100
 
 
 def test_evidence_weights_are_centralized_for_every_mode():

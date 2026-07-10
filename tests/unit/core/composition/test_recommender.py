@@ -89,6 +89,14 @@ def test_low_confidence_result_does_not_generate_advice():
     assert recommendation is None
 
 
+def test_medium_display_result_does_not_generate_directional_advice():
+    features = CompositionFeatureExtractor().extract(canvas(), [subject(90, 60)], None)
+    recommendation = CompositionRecommender().recommend(
+        features, mode_results(score=55, confidence=CompositionConfidence.MEDIUM)
+    )
+    assert recommendation is None
+
+
 def test_dominant_tilt_can_generate_rotation():
     features = CompositionFeatureExtractor().extract(line_image((8,)), [subject(110, 80, 100, 80)], None)
     recommendation = CompositionRecommender().recommend(

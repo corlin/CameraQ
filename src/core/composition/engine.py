@@ -65,6 +65,14 @@ class CompositionEngine:
         if insufficient:
             visible_candidates = []
             results = [item.model_copy(update={"is_visible": False}) for item in results]
+        elif sum(item.confidence is CompositionConfidence.HIGH for item in visible_candidates) >= 3:
+            # Medium-confidence cues expand an under-filled Top 3, but never
+            # displace three already-stable high-confidence modes.
+            visible_candidates = [
+                item
+                for item in visible_candidates
+                if item.confidence is CompositionConfidence.HIGH
+            ]
         visible_candidates.sort(
             key=lambda item: (
                 _top_mode_rank_score(item),

@@ -23,6 +23,31 @@ def test_first_high_confidence_frame_can_be_visible_immediately():
     assert visible(temporal.update(results(90), timestamp=0.0))
 
 
+def test_medium_confidence_display_candidate_can_be_visible():
+    temporal = CompositionTemporalFilter()
+    output = temporal.update(
+        results(50, confidence=CompositionConfidence.MEDIUM), timestamp=0.0
+    )
+    assert visible(output)
+
+
+def test_medium_display_candidate_uses_display_exit_hysteresis():
+    temporal = CompositionTemporalFilter()
+    temporal.update(results(50, confidence=CompositionConfidence.MEDIUM), timestamp=0.0)
+    for timestamp in (0.1, 0.2):
+        assert visible(
+            temporal.update(
+                results(30, confidence=CompositionConfidence.MEDIUM),
+                timestamp=timestamp,
+            )
+        )
+    assert not visible(
+        temporal.update(
+            results(30, confidence=CompositionConfidence.MEDIUM), timestamp=0.3
+        )
+    )
+
+
 def test_candidate_requires_three_entries_after_reset():
     temporal = CompositionTemporalFilter()
     temporal.update(results(10), timestamp=0.0, scene_changed=True)

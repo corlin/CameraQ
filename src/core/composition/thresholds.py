@@ -5,9 +5,13 @@ ANALYSIS_MAX_EDGE = 320
 ORIENTATION_BINS = 18
 ENTER_SCORE = 65.0
 EXIT_SCORE = 55.0
+DISPLAY_ENTER_SCORE = 45.0
+DISPLAY_EXIT_SCORE = 35.0
 WEIGHT_CONFIG_VERSION = "initial-rule-weights-v1"
 MODE_ENTER_SCORES = {mode: ENTER_SCORE for mode in CompositionMode}
 MODE_EXIT_SCORES = {mode: EXIT_SCORE for mode in CompositionMode}
+MODE_DISPLAY_ENTER_SCORES = {mode: DISPLAY_ENTER_SCORE for mode in CompositionMode}
+MODE_DISPLAY_EXIT_SCORES = {mode: DISPLAY_EXIT_SCORE for mode in CompositionMode}
 MODE_EVIDENCE_WEIGHTS: dict[CompositionMode, dict[str, float]] = {
     CompositionMode.RULE_OF_THIRDS: {"node": 1.0, "line": 0.82},
     CompositionMode.DYNAMIC_SYMMETRY: {"line": 0.70, "focus": 0.30},
@@ -42,6 +46,14 @@ def enter_score(mode: CompositionMode) -> float:
 
 def exit_score(mode: CompositionMode) -> float:
     return MODE_EXIT_SCORES[mode]
+
+
+def display_enter_score(mode: CompositionMode) -> float:
+    return MODE_DISPLAY_ENTER_SCORES[mode]
+
+
+def display_exit_score(mode: CompositionMode) -> float:
+    return MODE_DISPLAY_EXIT_SCORES[mode]
 
 
 def evidence_weight(mode: CompositionMode, component: str) -> float:
