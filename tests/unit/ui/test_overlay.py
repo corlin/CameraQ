@@ -1,7 +1,10 @@
 import pytest
 import numpy as np
+import time
+from types import SimpleNamespace
 from src.ui.overlay import OverlayRenderer
 from src.core.entities import (
+    AICoachingResult,
     AnalysisResult,
     CompositionAnalysis,
     CompositionConfidence,
@@ -11,6 +14,7 @@ from src.core.entities import (
     CompositionModeResult,
     CompositionAction,
     CompositionScore,
+    SceneContext,
     NormalizedLine,
     NormalizedPoint,
     TargetCompositionRecommendation,
@@ -150,3 +154,63 @@ def test_sidebar_composition_labels_fit_controls_and_chrome_avoids_missing_emoji
     assert renderer.small_font.getlength(renderer.COMPOSITION_INTERVAL_LABEL) <= 155
     assert renderer.SETTINGS_TITLE.isascii()
     assert renderer.SETTINGS_PROMPT.isascii()
+
+
+def test_top_overlay_zones_do_not_overlap_when_all_prompts_are_active():
+    renderer = OverlayRenderer()
+    renderer.settings.coaching_level = "PRO"
+    analysis = SimpleNamespace(
+        image_with_overlays=None,
+        feedback_message="建议微调构图",
+        score=SimpleNamespace(
+            total_score=80,
+            subject_score=80,
+            structure_score=80,
+            balance_score=80,
+            interference_score=80,
+            style_score=80,
+        ),
+        composition_analysis=composition_analysis(
+            (
+                CompositionMode.RULE_OF_THIRDS,
+                CompositionMode.DIAGONAL,
+                CompositionMode.BALANCED,
+            )
+        ),
+        subjects=[],
+        tracked_subjects=[],
+        aesthetics=SimpleNamespace(lighting_feedback="过曝，建议降低曝光"),
+        shutter_opportunity=False,
+        ai_coaching=AICoachingResult(
+            advice_text="请向左移动并稍微靠近主体，以便将主体放入三分点",
+            timestamp=time.time(),
+            duration=999,
+        ),
+        current_scene_context=SceneContext(
+            scene_type="Indoor",
+            lighting_condition="Bright",
+            recommended_iso=100,
+            recommended_shutter="1/100",
+        ),
+    )
+
+    renderer.draw(np.zeros((400, 600, 3), dtype=np.uint8), analysis, fps=30.0)
+    layout = renderer.last_layout
+
+    def overlaps(left, right):
+        return not (
+            left[2] <= right[0]
+            or right[2] <= left[0]
+            or left[3] <= right[1]
+            or right[3] <= left[1]
+        )
+
+    for left_name, right_name in (
+        ("composition", "warning"),
+        ("composition", "ai_coaching"),
+        ("scene", "composition"),
+        ("scene", "warning"),
+        ("scene", "ai_coaching"),
+        ("warning", "ai_coaching"),
+    ):
+        assert not overlaps(layout[left_name], layout[right_name])

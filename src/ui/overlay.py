@@ -44,6 +44,7 @@ class OverlayRenderer:
         self.user_query = ""
         self.ai_coach_last_update = 0.0
         self.ai_coach_message = None
+        self.last_layout = {}
         self.scene_icons = {
             "Outdoor": "⛰️ Outdoor",
             "Indoor": "🏠 Indoor",
@@ -92,6 +93,7 @@ class OverlayRenderer:
             
         h, w = out_frame.shape[:2]
         self.last_frame_size = (w, h)
+        self.last_layout = {}
 
         # Use PIL to draw Chinese text and translucent shapes
         img_pil = Image.fromarray(cv2.cvtColor(out_frame, cv2.COLOR_BGR2RGB)).convert("RGBA")
@@ -118,6 +120,8 @@ class OverlayRenderer:
         if analysis:
             current_time = time.time()
             level = getattr(self.settings, "coaching_level", "COACH")
+            # Reserve the top-center scene badge before placing transient toasts.
+            top_overlay_bottom = 80 if getattr(analysis, "current_scene_context", None) else 45
             
             # Draw Coaching Level Indicator
             level_text = f"AI: {level}"
@@ -137,11 +141,14 @@ class OverlayRenderer:
                     composition_lines.append(recommendation_text)
             if composition_lines:
                 y_composition = 48
-                widths = [draw_ov.textbbox((0, 0), line, font=self.small_font)[2] for line in composition_lines]
-                box_width = max(widths) + 20
-                box_height = len(composition_lines) * 27 + 10
+                metrics = [draw_ov.textbbox((0, 0), line, font=self.small_font) for line in composition_lines]
+                widths = [bbox[2] - bbox[0] for bbox in metrics]
+                line_height = max((bbox[3] - bbox[1] for bbox in metrics), default=19) + 8
+                box_width = max(widths, default=0) + 20
+                box_height = len(composition_lines) * line_height + 10
+                composition_rect = (10, y_composition, 10 + box_width, y_composition + box_height)
                 draw_ov.rounded_rectangle(
-                    [10, y_composition, 10 + box_width, y_composition + box_height],
+                    composition_rect,
                     radius=8,
                     fill=(0, 0, 0, 150),
                     outline=(255, 215, 0, 130),
@@ -149,11 +156,13 @@ class OverlayRenderer:
                 )
                 for index, line in enumerate(composition_lines):
                     draw_ov.text(
-                        (20, y_composition + 5 + index * 27),
+                        (20, y_composition + 5 + index * line_height),
                         line,
                         font=self.small_font,
                         fill=(255, 230, 150, 255),
                     )
+                self.last_layout["composition"] = composition_rect
+                top_overlay_bottom = max(top_overlay_bottom, composition_rect[3])
             if level == "PRO":
                 geometry = self._composition_evidence_geometry(
                     getattr(analysis, "composition_analysis", None), w, h
@@ -221,8 +230,12 @@ class OverlayRenderer:
                 h_text = bbox[3] - bbox[1]
                 x_warn = max((w - w_text) // 2, 10)
                 
-                draw_ov.rectangle([x_warn - 10, 50 - 5, x_warn + w_text + 10, 50 + h_text + 5], fill=(0, 0, 0, 180), outline=(255, 50, 50, 200), width=1)
-                draw_ov.text((x_warn, 50), warning_text, font=self.font, fill=(255, 100, 100, 255))
+                warning_y = top_overlay_bottom + 10
+                warning_rect = (x_warn - 10, warning_y - 5, x_warn + w_text + 10, warning_y + h_text + 5)
+                draw_ov.rectangle(warning_rect, fill=(0, 0, 0, 180), outline=(255, 50, 50, 200), width=1)
+                draw_ov.text((x_warn, warning_y), warning_text, font=self.font, fill=(255, 100, 100, 255))
+                self.last_layout["warning"] = warning_rect
+                top_overlay_bottom = max(top_overlay_bottom, warning_rect[3])
 
             # Draw Shutter Opportunity
             if level in ["COACH", "PRO"] and getattr(analysis, 'shutter_opportunity', False):
@@ -299,7 +312,7 @@ class OverlayRenderer:
                         self.ai_coach_last_update = current_time
                         
                     time_since_update = current_time - self.ai_coach_last_update
-                    y_ai = 100
+                    y_ai = max(100, top_overlay_bottom + 15)
                     
                     if level in ["COACH", "PRO"]:
                         if time_since_update < 5.0:
@@ -323,10 +336,12 @@ class OverlayRenderer:
                             max_w_ai = max([draw_ov.textbbox((0,0), l, font=self.font)[2] - draw_ov.textbbox((0,0), l, font=self.font)[0] for l in wrapped_coach_lines]) if wrapped_coach_lines else 0
                             x_ai = max((w - max_w_ai) // 2, 10)
                             
-                            draw_ov.rounded_rectangle([x_ai - 15, y_ai - 10, x_ai + max_w_ai + 15, y_ai + total_h_ai + 10], radius=10, fill=(0, 0, 0, 180), outline=outline_color, width=1)
+                            ai_rect = (x_ai - 15, y_ai - 10, x_ai + max_w_ai + 15, y_ai + total_h_ai + 10)
+                            draw_ov.rounded_rectangle(ai_rect, radius=10, fill=(0, 0, 0, 180), outline=outline_color, width=1)
                             
                             for i, l in enumerate(wrapped_coach_lines):
                                 draw_ov.text((x_ai, y_ai + i * 40), l, font=self.font, fill=fill_color)
+                            self.last_layout["ai_coaching"] = ai_rect
                         else:
                             # Collapsed pill view
                             collapsed_text = "💬 AI Insight (Tab)"
@@ -335,8 +350,10 @@ class OverlayRenderer:
                             ch = bbox[3] - bbox[1]
                             x_ai = max((w - cw) // 2, 10)
                             
-                            draw_ov.rounded_rectangle([x_ai - 10, y_ai - 5, x_ai + cw + 10, y_ai + ch + 5], radius=15, fill=(0, 0, 0, 150), outline=(200, 200, 200, 100), width=1)
+                            ai_rect = (x_ai - 10, y_ai - 5, x_ai + cw + 10, y_ai + ch + 5)
+                            draw_ov.rounded_rectangle(ai_rect, radius=15, fill=(0, 0, 0, 150), outline=(200, 200, 200, 100), width=1)
                             draw_ov.text((x_ai, y_ai), collapsed_text, font=self.small_font, fill=(200, 200, 200, 255))
+                            self.last_layout["ai_coaching"] = ai_rect
                     
                     # T003: Render Ghost Composition Box
                     target_box = getattr(ai, 'target_box', None)
@@ -379,17 +396,22 @@ class OverlayRenderer:
                 
                 active_tpl = getattr(getattr(analysis, 'ai_coaching', None), 'active_template', "Default")
                 scene_info = f"{st} | {lc} | Tpl: {active_tpl} | ISO {ctx.recommended_iso} | Shutter: {ctx.recommended_shutter}"
+                scene_info = self._truncate_text(
+                    draw_ov, scene_info, self.small_font, max(220, int(w * 0.38))
+                )
                 
                 # Top bar badge
                 bbox = draw_ov.textbbox((0,0), scene_info, font=self.small_font)
                 tw = bbox[2] - bbox[0]
                 th = bbox[3] - bbox[1]
                 
-                x_scene = max((w - tw) // 2, 10)
-                y_scene = 40
+                x_scene = max(w - tw - 20, 10)
+                y_scene = 48
                 
-                draw_ov.rounded_rectangle([x_scene - 15, y_scene - 5, x_scene + tw + 15, y_scene + th + 5], radius=15, fill=(0, 0, 0, 150), outline=(200, 200, 200, 80), width=1)
+                scene_rect = (x_scene - 15, y_scene - 5, x_scene + tw + 15, y_scene + th + 5)
+                draw_ov.rounded_rectangle(scene_rect, radius=15, fill=(0, 0, 0, 150), outline=(200, 200, 200, 80), width=1)
                 draw_ov.text((x_scene, y_scene), scene_info, font=self.small_font, fill=(200, 255, 200, 255))
+                self.last_layout["scene"] = scene_rect
 
         # Update sidebar animation state
         target_offset = 0.0 if self.is_sidebar_open else 320.0
@@ -428,6 +450,17 @@ class OverlayRenderer:
         # Composite the UI layer over the image
         img_pil = Image.alpha_composite(img_pil, ui_overlay).convert('RGB')
         return cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
+
+    @staticmethod
+    def _truncate_text(draw, text: str, font, max_width: int) -> str:
+        """Keep a single-line badge within its reserved screen zone."""
+        bbox = draw.textbbox((0, 0), text, font=font)
+        if bbox[2] - bbox[0] <= max_width:
+            return text
+        suffix = "…"
+        while text and draw.textbbox((0, 0), text + suffix, font=font)[2] > max_width:
+            text = text[:-1]
+        return text + suffix
 
     def _composition_summary(self, composition, level: str) -> list[str]:
         if composition is None or level == "OFF":
