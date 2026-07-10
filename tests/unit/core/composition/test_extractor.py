@@ -73,6 +73,24 @@ def test_extractor_falls_back_to_saliency_without_subject():
     assert features.primary_focus.x > 0.7
 
 
+def test_extractor_preserves_saliency_source_after_subject_fusion():
+    frame = np.zeros((240, 320, 3), dtype=np.uint8)
+    salient_subject = FusedSubject(
+        subject_id="salient",
+        class_name="salient-region",
+        confidence=0.7,
+        bounding_box=BoundingBox(x=120, y=80, width=80, height=80),
+        is_primary_subject=True,
+        source=SourceType.SALIENCY,
+    )
+
+    features = CompositionFeatureExtractor().extract(
+        frame, [salient_subject], saliency_for(frame, 160, 120)
+    )
+
+    assert features.primary_focus.source == "saliency"
+
+
 def test_extractor_detects_lines_contours_and_orientation():
     frame = grid_image()
     features = CompositionFeatureExtractor().extract(frame, [], saliency_for(frame, 160, 120))

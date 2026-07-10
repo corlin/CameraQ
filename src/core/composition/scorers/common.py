@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from src.core.composition.features import CompositionFeatures, LineFeature
+from src.core.composition.thresholds import enter_score, exit_score
 from src.core.entities import (
     CompositionConfidence,
     CompositionEvidence,
@@ -16,10 +17,15 @@ def clamp_score(value: float) -> float:
     return round(max(0.0, min(100.0, value)), 2)
 
 
-def confidence_for(score: float, features: CompositionFeatures) -> CompositionConfidence:
-    if score >= 70 and features.evidence_quality >= 0.18:
+def confidence_for(
+    score: float,
+    features: CompositionFeatures,
+    mode: CompositionMode,
+) -> CompositionConfidence:
+    if score >= enter_score(mode) and features.evidence_quality >= 0.18:
         return CompositionConfidence.HIGH
-    if score >= 40 and features.evidence_quality >= 0.18:
+    medium_threshold = min(40.0, exit_score(mode))
+    if score >= medium_threshold and features.evidence_quality >= 0.18:
         return CompositionConfidence.MEDIUM
     return CompositionConfidence.LOW
 
@@ -61,7 +67,7 @@ def result(
     return CompositionModeResult(
         mode=mode,
         match_score=bounded,
-        confidence=confidence_for(bounded, features),
+        confidence=confidence_for(bounded, features, mode),
         evidence=evidence_items or [],
         is_visible=False,
         stable_for_ms=0,

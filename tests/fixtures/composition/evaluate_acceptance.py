@@ -8,6 +8,7 @@ import cv2
 
 from src.core.composition.engine import CompositionEngine
 from src.core.composition.thresholds import enter_score
+from src.core.detectors.saliency_detector import SaliencyDetector
 from src.core.entities import BoundingBox, CompositionConfidence, CompositionMode, FusedSubject, SourceType
 
 
@@ -35,25 +36,47 @@ def _rate(numerator: int, denominator: int) -> float | None:
     return numerator / denominator if denominator else None
 
 
-def _subjects(case: dict, key: str, frame_width: int, frame_height: int) -> list[FusedSubject]:
+def _subjects(
+    case: dict,
+    key: str,
+    frame_width: int,
+    frame_height: int,
+    saliency=None,
+) -> list[FusedSubject]:
     box = case.get(key)
-    if not box:
+    if box:
+        x, y, width, height = box
+        return [
+            FusedSubject(
+                subject_id="acceptance-subject",
+                class_name="acceptance-subject",
+                confidence=0.95,
+                bounding_box=BoundingBox(
+                    x=x * frame_width,
+                    y=y * frame_height,
+                    width=width * frame_width,
+                    height=height * frame_height,
+                ),
+                is_primary_subject=True,
+                source=SourceType.YOLO,
+            )
+        ]
+    if saliency is None or not saliency.bounding_boxes:
         return []
-    x, y, width, height = box
+    primary = max(
+        saliency.bounding_boxes,
+        key=lambda item: item.width * item.height,
+    )
     return [
         FusedSubject(
-            subject_id="acceptance-subject",
-            class_name="acceptance-subject",
-            confidence=0.95,
-            bounding_box=BoundingBox(
-                x=x * frame_width,
-                y=y * frame_height,
-                width=width * frame_width,
-                height=height * frame_height,
-            ),
-            is_primary_subject=True,
-            source=SourceType.YOLO,
+            subject_id=f"acceptance-saliency-{index}",
+            class_name="salient-region",
+            confidence=saliency.max_salient_score,
+            bounding_box=salient_box,
+            is_primary_subject=salient_box is primary,
+            source=SourceType.SALIENCY,
         )
+        for index, salient_box in enumerate(saliency.bounding_boxes)
     ]
 
 
@@ -73,16 +96,21 @@ def evaluate_manifest(path: str | Path) -> AcceptanceEvaluation:
     degraded_total = degraded_abstentions = 0
     recommendation_total = recommendation_improvements = recommendation_action_matches = 0
     strong_checks = strong_preserved = 0
+    saliency_detector = SaliencyDetector()
 
     for case in payload.get("cases", []):
         if case.get("review_status") != "accepted":
             continue
+        kind = case["kind"]
+        if kind in {"positive", "hard_negative"} and case.get("split") != "acceptance":
+            continue
         frame = _read_image(manifest_path.parent / case["path"])
         height, width = frame.shape[:2]
+        saliency = saliency_detector.detect(frame)
         analysis = CompositionEngine().analyze(
             frame,
-            _subjects(case, "subject_box_before", width, height),
-            None,
+            _subjects(case, "subject_box_before", width, height, saliency),
+            saliency,
             timestamp=0,
         )
         predictions = {
@@ -91,7 +119,6 @@ def evaluate_manifest(path: str | Path) -> AcceptanceEvaluation:
             if result.confidence is CompositionConfidence.HIGH
             and result.match_score >= enter_score(result.mode)
         }
-        kind = case["kind"]
         truths = {CompositionMode(value) for value in case.get("labels", [])}
         negatives = {CompositionMode(value) for value in case.get("negative_for", [])}
 
@@ -124,10 +151,17 @@ def evaluate_manifest(path: str | Path) -> AcceptanceEvaluation:
             )
             after_frame = _read_image(manifest_path.parent / case["after_path"])
             after_height, after_width = after_frame.shape[:2]
+            after_saliency = saliency_detector.detect(after_frame)
             after = CompositionEngine().analyze(
                 after_frame,
-                _subjects(case, "subject_box_after", after_width, after_height),
-                None,
+                _subjects(
+                    case,
+                    "subject_box_after",
+                    after_width,
+                    after_height,
+                    after_saliency,
+                ),
+                after_saliency,
                 timestamp=0,
             )
             after_score = next(

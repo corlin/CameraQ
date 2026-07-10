@@ -119,9 +119,12 @@ both classes in both the `calibration` and untouched `acceptance` splits. The co
 proposal when a class/split is missing; abstained positives remain false negatives in recall:
 
 ```bash
+uv run python -m tests.fixtures.composition.assign_calibration_splits
 uv run python -m tests.fixtures.composition.calibrate_thresholds
 ```
 
+The split command deterministically targets 40% of every accepted mode/class stratum for calibration,
+keeps each source item in exactly one split, and leaves the remainder untouched for acceptance.
 The output proposes per-mode enter/exit thresholds and separately reports calibration and acceptance
 precision/recall. It also embeds the exact `weight_config_version` and per-mode evidence-weight snapshot
 used to score the images. It never edits `src/core/composition/thresholds.py` automatically.

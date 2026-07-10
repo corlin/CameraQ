@@ -68,6 +68,84 @@ def review_candidate(
     raise KeyError(f"unknown candidate id: {case_id}")
 
 
+def add_negative_annotations(
+    manifest_path: str | Path, annotations: dict[str, list[str]]
+) -> int:
+    """Add independently reviewed cross-mode negatives and reset stale decisions."""
+    path = Path(manifest_path)
+    payload = json.loads(path.read_text())
+    known_labels = set(payload.get("labels", []))
+    cases_by_id = {str(case.get("id")): case for case in payload.get("cases", [])}
+    unknown_ids = sorted(set(annotations) - set(cases_by_id))
+    if unknown_ids:
+        raise KeyError(f"unknown candidate ids: {unknown_ids}")
+    unknown_labels = sorted(
+        {
+            label
+            for labels in annotations.values()
+            for label in labels
+            if label not in known_labels
+        }
+    )
+    if unknown_labels:
+        raise ValueError(f"unknown composition labels: {unknown_labels}")
+
+    changed = 0
+    for case_id, additions in annotations.items():
+        case = cases_by_id[case_id]
+        before = set(case.get("negative_for", []))
+        after = before | set(additions)
+        if after == before:
+            continue
+        case["negative_for"] = sorted(after)
+        _apply_decision(case, "pending", "", "")
+        changed += 1
+    if changed:
+        path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+    return changed
+
+
+def add_positive_annotations(
+    manifest_path: str | Path, annotations: dict[str, list[str]]
+) -> int:
+    """Add independently reviewed cross-mode positives and reset stale decisions."""
+    path = Path(manifest_path)
+    payload = json.loads(path.read_text())
+    known_labels = set(payload.get("labels", []))
+    cases_by_id = {str(case.get("id")): case for case in payload.get("cases", [])}
+    unknown_ids = sorted(set(annotations) - set(cases_by_id))
+    if unknown_ids:
+        raise KeyError(f"unknown candidate ids: {unknown_ids}")
+    unknown_labels = sorted(
+        {
+            label
+            for labels in annotations.values()
+            for label in labels
+            if label not in known_labels
+        }
+    )
+    if unknown_labels:
+        raise ValueError(f"unknown composition labels: {unknown_labels}")
+
+    changed = 0
+    for case_id, additions in annotations.items():
+        case = cases_by_id[case_id]
+        before = set(case.get("labels", []))
+        after = before | set(additions)
+        if after == before:
+            continue
+        case["labels"] = sorted(after)
+        case["negative_for"] = sorted(
+            set(case.get("negative_for", [])) - set(additions)
+        )
+        case["kind"] = "positive"
+        _apply_decision(case, "pending", "", "")
+        changed += 1
+    if changed:
+        path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+    return changed
+
+
 def export_review_queue(manifest_path: str | Path, output_path: str | Path) -> int:
     payload = json.loads(Path(manifest_path).read_text())
     cases = [
@@ -78,7 +156,9 @@ def export_review_queue(manifest_path: str | Path, output_path: str | Path) -> i
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=REVIEW_QUEUE_FIELDS)
+        writer = csv.DictWriter(
+            handle, fieldnames=REVIEW_QUEUE_FIELDS, lineterminator="\n"
+        )
         writer.writeheader()
         for case in cases:
             writer.writerow(

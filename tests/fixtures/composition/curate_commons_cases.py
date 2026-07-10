@@ -294,6 +294,65 @@ def _download_and_normalize(url: str, path: Path) -> str:
     return hashlib.sha256(output).hexdigest()
 
 
+def _encode_jpeg(frame: np.ndarray, path: Path) -> str:
+    ok, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    if not ok:
+        raise ValueError(f"could not encode {path}")
+    output = encoded.tobytes()
+    path.write_bytes(output)
+    return hashlib.sha256(output).hexdigest()
+
+
+def edge_crop_for_unbalanced_composition(
+    frame: np.ndarray, *, retain_left: bool
+) -> np.ndarray:
+    """Tightly crop one side so a centered subject falls near the opposite edge."""
+    if frame.ndim != 3 or frame.shape[1] < 4:
+        raise ValueError("expected a color image at least four pixels wide")
+    width = frame.shape[1]
+    crop_width = max(2, round(width * 0.62))
+    start = 0 if retain_left else width - crop_width
+    return frame[:, start : start + crop_width].copy()
+
+
+def apply_unbalanced_edge_crops(
+    manifest_path: str | Path, case_ids: list[str]
+) -> int:
+    """Create reproducible real-image hard negatives without losing provenance."""
+    path = Path(manifest_path)
+    payload = json.loads(path.read_text())
+    cases_by_id = {str(case.get("id")): case for case in payload.get("cases", [])}
+    unknown = sorted(set(case_ids) - set(cases_by_id))
+    if unknown:
+        raise KeyError(f"unknown candidate ids: {unknown}")
+
+    marker = "directional 62% edge crop for controlled unbalanced composition"
+    changed = 0
+    for index, case_id in enumerate(case_ids):
+        case = cases_by_id[case_id]
+        modifications = str(case.get("modifications", ""))
+        if marker in modifications:
+            continue
+        image_path = path.parent / str(case["path"])
+        frame = cv2.imread(str(image_path))
+        if frame is None:
+            raise ValueError(f"could not decode {image_path}")
+        cropped = edge_crop_for_unbalanced_composition(
+            frame, retain_left=index % 2 == 0
+        )
+        case["sha256"] = _encode_jpeg(cropped, image_path)
+        case["modifications"] = f"{modifications}; {marker}".strip("; ")
+        case["review_status"] = "pending"
+        case.pop("reviewer", None)
+        case.pop("review_notes", None)
+        case.pop("reviewed_at", None)
+        changed += 1
+
+    if changed:
+        path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+    return changed
+
+
 def _contact_sheet(root: Path, cases: list[dict], relative_path: str) -> None:
     tile_width, tile_height = 240, 190
     columns = 5

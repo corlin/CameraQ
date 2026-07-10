@@ -16,6 +16,23 @@ from .temporal import CompositionTemporalFilter
 from .thresholds import INSUFFICIENT_EVIDENCE_QUALITY
 
 
+TOP_MODE_RANKING_BONUS = {
+    CompositionMode.CENTRIPETAL: 25.0,
+    CompositionMode.RADIAL: 25.0,
+    CompositionMode.CROSS: 25.0,
+    CompositionMode.DIAGONAL: 25.0,
+    CompositionMode.CURVE: 25.0,
+    CompositionMode.VERTICAL: 25.0,
+}
+
+
+def _top_mode_rank_score(item) -> float:
+    bonus = TOP_MODE_RANKING_BONUS.get(item.mode, 0.0)
+    if item.mode is CompositionMode.CENTRIPETAL and item.match_score >= 40.0:
+        bonus += 15.0
+    return item.match_score + bonus
+
+
 class CompositionEngine:
     def __init__(self, extractor: CompositionFeatureExtractor | None = None):
         self.extractor = extractor or CompositionFeatureExtractor()
@@ -49,7 +66,12 @@ class CompositionEngine:
             visible_candidates = []
             results = [item.model_copy(update={"is_visible": False}) for item in results]
         visible_candidates.sort(
-            key=lambda item: (item.match_score, item.confidence is CompositionConfidence.HIGH), reverse=True
+            key=lambda item: (
+                _top_mode_rank_score(item),
+                item.confidence is CompositionConfidence.HIGH,
+                item.match_score,
+            ),
+            reverse=True,
         )
         top_modes = [item.mode for item in visible_candidates[:3]]
         top_set = set(top_modes)

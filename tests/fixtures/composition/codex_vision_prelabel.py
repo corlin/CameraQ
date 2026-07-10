@@ -92,6 +92,18 @@ ASSESSMENTS = {
     "tunnel-positive": SheetAssessment(_indices("0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19")),
     "tunnel-negative": SheetAssessment(_indices("0 1 3 4 5 6 7 8 9 10 11 12 13 14 15 18 19")),
     "cross-negative": SheetAssessment(_indices("1 2 3 6 7 8 9 10 14 15 16 17 18")),
+    "triangle-architecture-positive": SheetAssessment(
+        _indices("0 1 2 4 5 7 8 9"), reviewed_count=10
+    ),
+    "triangle-architecture-negative": SheetAssessment(
+        _indices("0 1 2 3 4 5 6 7 8 9"), reviewed_count=10
+    ),
+    "balanced-perspective-positive": SheetAssessment(
+        frozenset(), _indices("20 21 22 23"), reviewed_count=24
+    ),
+    "balanced-perspective-negative": SheetAssessment(
+        _indices("0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19")
+    ),
 }
 
 
@@ -168,11 +180,17 @@ def generate() -> tuple[int, int]:
             )
 
     with PRELABELS.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=prelabels[0].keys())
+        writer = csv.DictWriter(
+            handle, fieldnames=prelabels[0].keys(), lineterminator="\n"
+        )
         writer.writeheader()
         writer.writerows(prelabels)
     with DECISIONS.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=("id", "decision", "reviewer", "review_notes"))
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=("id", "decision", "reviewer", "review_notes"),
+            lineterminator="\n",
+        )
         writer.writeheader()
         writer.writerows(decisions)
     return len(prelabels), len(decisions)

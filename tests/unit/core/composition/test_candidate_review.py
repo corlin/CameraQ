@@ -1,13 +1,126 @@
-import json
 import csv
+import json
 
+import cv2
+import numpy as np
 import pytest
 
+from tests.fixtures.composition import curate_commons_cases
+from tests.fixtures.composition import review_candidates
 from tests.fixtures.composition.review_candidates import (
     export_review_queue,
     import_review_decisions,
     review_candidate,
 )
+
+
+def test_cross_mode_negative_annotation_resets_prior_review(tmp_path):
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "labels": ["HORIZONTAL", "OBLIQUE"],
+                "cases": [
+                    {
+                        "id": "level-horizon",
+                        "labels": ["HORIZONTAL"],
+                        "negative_for": [],
+                        "review_status": "accepted",
+                        "reviewer": "first-reviewer",
+                        "review_notes": "clear level horizon",
+                        "reviewed_at": "2026-07-05T00:00:00Z",
+                    }
+                ],
+            }
+        )
+    )
+
+    changed = review_candidates.add_negative_annotations(
+        manifest, {"level-horizon": ["OBLIQUE"]}
+    )
+
+    saved = json.loads(manifest.read_text())["cases"][0]
+    assert changed == 1
+    assert saved["negative_for"] == ["OBLIQUE"]
+    assert saved["review_status"] == "pending"
+    assert "reviewer" not in saved
+    assert "review_notes" not in saved
+    assert "reviewed_at" not in saved
+
+
+def test_cross_mode_positive_annotation_promotes_case_and_resets_review(tmp_path):
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "labels": ["CENTRIPETAL", "TUNNEL"],
+                "cases": [
+                    {
+                        "id": "tunnel-leading-lines",
+                        "kind": "hard_negative",
+                        "labels": [],
+                        "negative_for": ["CENTRIPETAL"],
+                        "review_status": "accepted",
+                        "reviewer": "first-reviewer",
+                        "review_notes": "old decision",
+                        "reviewed_at": "2026-07-05T00:00:00Z",
+                    }
+                ],
+            }
+        )
+    )
+
+    changed = review_candidates.add_positive_annotations(
+        manifest, {"tunnel-leading-lines": ["TUNNEL"]}
+    )
+
+    saved = json.loads(manifest.read_text())["cases"][0]
+    assert changed == 1
+    assert saved["labels"] == ["TUNNEL"]
+    assert saved["kind"] == "positive"
+    assert saved["review_status"] == "pending"
+    assert "reviewer" not in saved
+
+
+def test_apply_unbalanced_edge_crops_is_reproducible_and_resets_review(tmp_path):
+    image_dir = tmp_path / "images"
+    image_dir.mkdir()
+    image_path = image_dir / "candidate.jpg"
+    frame = np.zeros((40, 100, 3), dtype=np.uint8)
+    frame[:, 40:60] = 255
+    assert cv2.imwrite(str(image_path), frame)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "id": "candidate",
+                        "path": "images/candidate.jpg",
+                        "review_status": "accepted",
+                        "reviewer": "reviewer",
+                        "review_notes": "reviewed",
+                        "modifications": "resized",
+                    }
+                ]
+            }
+        )
+    )
+
+    assert curate_commons_cases.apply_unbalanced_edge_crops(
+        manifest, ["candidate"]
+    ) == 1
+    assert curate_commons_cases.apply_unbalanced_edge_crops(
+        manifest, ["candidate"]
+    ) == 0
+
+    cropped = cv2.imread(str(image_path))
+    updated = json.loads(manifest.read_text())["cases"][0]
+    assert cropped.shape[:2] == (40, 62)
+    assert updated["review_status"] == "pending"
+    assert "reviewer" not in updated
+    assert "directional 62% edge crop" in updated["modifications"]
+    assert len(updated["sha256"]) == 64
 
 
 def test_review_candidate_records_human_decision_without_changing_source_annotation(tmp_path):
@@ -72,6 +185,7 @@ def test_review_queue_round_trip_only_applies_decision_fields(tmp_path):
     queue = tmp_path / "review.csv"
 
     assert export_review_queue(manifest, queue) == 1
+    assert b"\r\n" not in queue.read_bytes()
     with queue.open(newline="") as handle:
         rows = list(csv.DictReader(handle))
     assert rows[0]["proposed_labels"] == "DIAGONAL"

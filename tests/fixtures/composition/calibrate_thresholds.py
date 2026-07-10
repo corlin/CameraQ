@@ -11,6 +11,7 @@ import cv2
 
 from src.core.composition.engine import CompositionEngine
 from src.core.composition.thresholds import MODE_EVIDENCE_WEIGHTS, WEIGHT_CONFIG_VERSION
+from src.core.detectors.saliency_detector import SaliencyDetector
 from src.core.entities import (
     BoundingBox,
     CompositionMode,
@@ -163,25 +164,46 @@ def build_calibration_report(
     return report
 
 
-def _subjects(case: dict, frame_width: int, frame_height: int) -> list[FusedSubject]:
+def _subjects(
+    case: dict,
+    frame_width: int,
+    frame_height: int,
+    saliency=None,
+) -> list[FusedSubject]:
     box = case.get("subject_box_before")
-    if not box:
+    if box:
+        x, y, width, height = box
+        return [
+            FusedSubject(
+                subject_id="calibration-subject",
+                class_name="calibration-subject",
+                confidence=0.95,
+                bounding_box=BoundingBox(
+                    x=x * frame_width,
+                    y=y * frame_height,
+                    width=width * frame_width,
+                    height=height * frame_height,
+                ),
+                is_primary_subject=True,
+                source=SourceType.YOLO,
+            )
+        ]
+    if saliency is None or not saliency.bounding_boxes:
         return []
-    x, y, width, height = box
+    primary = max(
+        saliency.bounding_boxes,
+        key=lambda item: item.width * item.height,
+    )
     return [
         FusedSubject(
-            subject_id="calibration-subject",
-            class_name="calibration-subject",
-            confidence=0.95,
-            bounding_box=BoundingBox(
-                x=x * frame_width,
-                y=y * frame_height,
-                width=width * frame_width,
-                height=height * frame_height,
-            ),
-            is_primary_subject=True,
-            source=SourceType.YOLO,
+            subject_id=f"calibration-saliency-{index}",
+            class_name="salient-region",
+            confidence=saliency.max_salient_score,
+            bounding_box=salient_box,
+            is_primary_subject=salient_box is primary,
+            source=SourceType.SALIENCY,
         )
+        for index, salient_box in enumerate(saliency.bounding_boxes)
     ]
 
 
@@ -189,6 +211,7 @@ def score_reviewed_manifest(manifest_path: str | Path) -> list[ScoredExample]:
     path = Path(manifest_path)
     payload = json.loads(path.read_text())
     examples: list[ScoredExample] = []
+    saliency_detector = SaliencyDetector()
     for case in payload.get("cases", []):
         if case.get("review_status") != "accepted":
             continue
@@ -198,10 +221,11 @@ def score_reviewed_manifest(manifest_path: str | Path) -> list[ScoredExample]:
         if frame is None:
             raise FileNotFoundError(path.parent / case["path"])
         height, width = frame.shape[:2]
+        saliency = saliency_detector.detect(frame)
         analysis = CompositionEngine().analyze(
             frame,
-            _subjects(case, width, height),
-            None,
+            _subjects(case, width, height, saliency),
+            saliency,
             timestamp=0,
         )
         scores = {result.mode: result.match_score for result in analysis.mode_results}

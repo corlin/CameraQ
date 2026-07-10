@@ -158,7 +158,7 @@ def generate_review_page(manifest_path: str | Path, output_path: str | Path) -> 
 </html>
 """
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(document)
+    output.write_text("\n".join(line.rstrip() for line in document.splitlines()) + "\n")
     return len(cases)
 
 

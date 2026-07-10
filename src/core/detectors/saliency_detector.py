@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-from typing import List
 from src.core.entities import SaliencyMap, BoundingBox
 
 class SaliencyDetector:
@@ -45,9 +44,10 @@ class SaliencyDetector:
         boxes = []
         max_score = 0.0
         
+        minimum_area = max(25.0, image.shape[0] * image.shape[1] * 0.002)
         for cnt in contours:
             area = cv2.contourArea(cnt)
-            if area > 1000: # Filter out noise
+            if area > minimum_area:
                 x, y, w, h = cv2.boundingRect(cnt)
                 boxes.append(BoundingBox(x=x, y=y, width=w, height=h))
                 
@@ -55,7 +55,9 @@ class SaliencyDetector:
                 mask = np.zeros_like(saliency)
                 cv2.drawContours(mask, [cnt], -1, 255, -1)
                 mean_val = cv2.mean(saliency, mask=mask)[0]
-                score = (area / (image.shape[0] * image.shape[1])) * (mean_val / 255.0)
+                area_ratio = area / (image.shape[0] * image.shape[1])
+                size_reliability = min(1.0, float(np.sqrt(area_ratio / 0.002)))
+                score = (mean_val / 255.0) * size_reliability
                 if score > max_score:
                     max_score = score
                     

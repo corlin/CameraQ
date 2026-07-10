@@ -3,7 +3,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-from src.core.entities import FusedSubject, SaliencyMap
+from src.core.entities import FusedSubject, SaliencyMap, SourceType
 
 from .features import CompositionFeatures, ContourFeature, FocusFeature, LineFeature
 from .geometry import angle_degrees, line_intersection, orientation_histogram
@@ -146,7 +146,11 @@ class CompositionFeatureExtractor:
                 x=float(np.clip(center_x, 0, 1)),
                 y=float(np.clip(center_y, 0, 1)),
                 weight=float(np.clip(primary.confidence, 0, 1)),
-                source="subject",
+                source=(
+                    "saliency"
+                    if primary.source is SourceType.SALIENCY
+                    else "subject"
+                ),
             )
             subject_area_ratio = float(np.clip(box.width * box.height / (frame_width * frame_height), 0, 1))
             subject_clipped = (
