@@ -59,6 +59,19 @@ uv run python src/ui/camera_app.py
 ```
 Press 'q' to quit the application, press 'TAB' to toggle the settings sidebar, or press 'c' to manually request AI coaching on the current frame.
 
+The viewfinder is usable without `GEMINI_API_KEY`; the local OpenCV/NumPy composition
+recognizer and overlay remain active, while network coaching is disabled. To make the
+offline behavior explicit, run `env -u GEMINI_API_KEY uv run python src/ui/camera_app.py`.
+On cold start, CameraQ opens a status page before loading the YOLO/torch analyzer, then
+discards the first three camera warm-up frames. If macOS denies camera access, the same
+page shows the error instead of leaving a black window; enable the terminal or IDE under
+System Settings → Privacy & Security → Camera and restart the command.
+
+The overlay keeps the composition summary in the upper-left, the scene badge in the
+upper-right, and stacks exposure/AI prompts below the summary. Text uses the installed
+system font and the layout reserves space between prompt boxes so simultaneous alerts do
+not cover the composition labels.
+
 ### Offline Image Upload (Stage 1)
 To launch the Gradio web UI for static image analysis:
 ```bash
