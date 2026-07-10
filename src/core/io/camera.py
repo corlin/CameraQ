@@ -22,8 +22,15 @@ class CameraStreamManager:
     def start(self):
         self.last_error = ""
         self._warmup_frames = 3
-        self.cap = cv2.VideoCapture(self.source)
-        if not self.cap.isOpened():
+        try:
+            self.cap = cv2.VideoCapture(self.source)
+            opened = self.cap.isOpened()
+        except Exception as exc:
+            self.cap = None
+            self.last_error = f"摄像头初始化失败：{exc}"
+            logger.exception(self.last_error)
+            return False
+        if not opened:
             self.last_error = f"无法打开摄像头源 {self.source}；请检查系统摄像头权限。"
             logger.warning(self.last_error)
             self.cap.release()

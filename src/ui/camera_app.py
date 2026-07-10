@@ -21,12 +21,31 @@ WINDOW_NAME = "CameraQ Real-time Viewfinder"
 
 def _status_frame(message: str, width: int = 960, height: int = 540) -> np.ndarray:
     """Render a visible status page while camera/models are starting."""
-    frame = np.zeros((height, width, 3), dtype=np.uint8)
-    cv2.putText(frame, "CameraQ", (40, 90), cv2.FONT_HERSHEY_SIMPLEX, 1.4,
-                (0, 210, 255), 2, cv2.LINE_AA)
-    cv2.putText(frame, message, (40, 160), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
-                (235, 235, 235), 2, cv2.LINE_AA)
-    return frame
+    from PIL import Image, ImageDraw, ImageFont
+
+    font_paths = (
+        "/System/Library/Fonts/PingFang.ttc",
+        "/System/Library/Fonts/LanguageSupport/PingFang.ttc",
+        "/System/Library/Fonts/Hiragino Sans GB.ttc",
+        "/System/Library/Fonts/STHeiti Light.ttc",
+    )
+    font_path = next((path for path in font_paths if Path(path).exists()), None)
+    try:
+        title_font = ImageFont.truetype(font_path, 42) if font_path else ImageFont.load_default()
+        message_font = ImageFont.truetype(font_path, 25) if font_path else ImageFont.load_default()
+    except OSError:
+        title_font = ImageFont.load_default()
+        message_font = ImageFont.load_default()
+
+    image = Image.new("RGB", (width, height), (24, 28, 36))
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((32, 32, width - 32, height - 32), radius=16,
+                           fill=(31, 37, 48), outline=(0, 190, 235), width=2)
+    draw.text((64, 78), "CameraQ", font=title_font, fill=(70, 220, 255))
+    draw.text((64, 160), message, font=message_font, fill=(240, 240, 240))
+    draw.text((64, height - 92), "CameraQ local viewfinder", font=message_font,
+              fill=(155, 165, 180))
+    return cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
 
 def main():
     import argparse

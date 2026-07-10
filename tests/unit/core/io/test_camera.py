@@ -1,6 +1,7 @@
 import pytest
 import numpy as np
 import time
+import cv2
 from src.core.io.camera import CameraStreamManager
 
 def test_camera_stream_manager():
@@ -48,3 +49,15 @@ def test_camera_software_exposure():
     assert camera.software_exposure_compensation == -1.0
     frame = camera.read()
     assert frame.mean() < 100
+
+
+def test_camera_start_reports_capture_initialization_error(monkeypatch):
+    def raise_on_open(_source):
+        raise RuntimeError("permission denied")
+
+    monkeypatch.setattr(cv2, "VideoCapture", raise_on_open)
+    camera = CameraStreamManager(source=0)
+
+    assert not camera.start()
+    assert "摄像头初始化失败" in camera.last_error
+    assert camera.cap is None
