@@ -10,7 +10,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.core.io.camera import CameraStreamManager
-from src.core.analyzer import CameraQAnalyzer
 from src.ui.overlay import OverlayRenderer
 from src.core.settings import SettingsManager
 
@@ -56,6 +55,10 @@ def main():
         
     cv2.imshow(WINDOW_NAME, _status_frame("正在加载本地视觉模型，请稍候..."))
     cv2.waitKey(1)
+    # Import the heavy analyzer only after the status window is visible. The
+    # YOLO/torch import path can take tens of seconds on a cold start.
+    from src.core.analyzer import CameraQAnalyzer
+
     analyzer = CameraQAnalyzer(settings=settings)
     renderer = OverlayRenderer(settings=settings)
     
