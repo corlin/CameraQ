@@ -7,9 +7,41 @@ ENTER_SCORE = 65.0
 EXIT_SCORE = 55.0
 DISPLAY_ENTER_SCORE = 45.0
 DISPLAY_EXIT_SCORE = 35.0
-WEIGHT_CONFIG_VERSION = "initial-rule-weights-v1"
-MODE_ENTER_SCORES = {mode: ENTER_SCORE for mode in CompositionMode}
-MODE_EXIT_SCORES = {mode: EXIT_SCORE for mode in CompositionMode}
+WEIGHT_CONFIG_VERSION = "reviewed-calibration-v2"
+MODE_ENTER_SCORES = {
+    CompositionMode.RULE_OF_THIRDS: 59.46,
+    CompositionMode.DYNAMIC_SYMMETRY: 50.86,
+    CompositionMode.BALANCED: 78.85,
+    CompositionMode.TRIANGLE: 65.93,
+    CompositionMode.DIAGONAL: 21.22,
+    CompositionMode.HORIZONTAL: 75.0,
+    CompositionMode.OBLIQUE: 44.72,
+    CompositionMode.CURVE: 35.46,
+    CompositionMode.RADIAL: 49.49,
+    CompositionMode.CHECKERBOARD: 38.0,
+    CompositionMode.CENTRIPETAL: 17.65,
+    CompositionMode.TUNNEL: 36.34,
+    CompositionMode.FRAME_WITHIN_FRAME: 95.85,
+    CompositionMode.CROSS: 46.13,
+    CompositionMode.VERTICAL: 23.38,
+}
+MODE_EXIT_SCORES = {
+    CompositionMode.RULE_OF_THIRDS: 49.46,
+    CompositionMode.DYNAMIC_SYMMETRY: 40.86,
+    CompositionMode.BALANCED: 68.85,
+    CompositionMode.TRIANGLE: 55.93,
+    CompositionMode.DIAGONAL: 11.22,
+    CompositionMode.HORIZONTAL: 65.0,
+    CompositionMode.OBLIQUE: 34.72,
+    CompositionMode.CURVE: 25.46,
+    CompositionMode.RADIAL: 39.49,
+    CompositionMode.CHECKERBOARD: 28.0,
+    CompositionMode.CENTRIPETAL: 7.65,
+    CompositionMode.TUNNEL: 26.34,
+    CompositionMode.FRAME_WITHIN_FRAME: 85.85,
+    CompositionMode.CROSS: 36.13,
+    CompositionMode.VERTICAL: 13.38,
+}
 MODE_DISPLAY_ENTER_SCORES = {mode: DISPLAY_ENTER_SCORE for mode in CompositionMode}
 MODE_DISPLAY_EXIT_SCORES = {mode: DISPLAY_EXIT_SCORE for mode in CompositionMode}
 MODE_EVIDENCE_WEIGHTS: dict[CompositionMode, dict[str, float]] = {

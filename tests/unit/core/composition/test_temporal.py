@@ -51,18 +51,18 @@ def test_medium_display_candidate_uses_display_exit_hysteresis():
 def test_candidate_requires_three_entries_after_reset():
     temporal = CompositionTemporalFilter()
     temporal.update(results(10), timestamp=0.0, scene_changed=True)
-    assert not visible(temporal.update(results(70), timestamp=0.1))
-    assert not visible(temporal.update(results(70), timestamp=0.2))
-    assert visible(temporal.update(results(70), timestamp=0.3))
+    assert not visible(temporal.update(results(80), timestamp=0.1))
+    assert not visible(temporal.update(results(80), timestamp=0.2))
+    assert visible(temporal.update(results(80), timestamp=0.3))
 
 
 def test_active_mode_survives_hysteresis_and_three_exit_samples():
     temporal = CompositionTemporalFilter()
     temporal.update(results(90), timestamp=0.0)
-    assert visible(temporal.update(results(60), timestamp=0.1))
-    assert visible(temporal.update(results(50), timestamp=0.2))
-    assert visible(temporal.update(results(50), timestamp=0.3))
-    assert not visible(temporal.update(results(50), timestamp=0.4))
+    assert visible(temporal.update(results(70), timestamp=0.1))
+    assert visible(temporal.update(results(60), timestamp=0.2))
+    assert visible(temporal.update(results(60), timestamp=0.3))
+    assert not visible(temporal.update(results(60), timestamp=0.4))
 
 
 def test_scene_change_clears_old_mode_and_allows_new_first_frame():

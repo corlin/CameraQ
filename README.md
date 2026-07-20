@@ -37,6 +37,16 @@ logging is off by default; when explicitly enabled it writes NDJSON under
 for at most seven days, and can be cleared from the sidebar. Disabling composition recognition removes
 only its overlay and leaves the viewfinder and capture operations available.
 
+### Validation status
+
+The current per-mode thresholds are frozen from the isolated calibration split (`reviewed-calibration-v2`).
+On the untouched acceptance split, macro precision is 80.50% and macro recall is 70.36%; however, Top 3
+coverage is 77/138 (55.80%), below the 85% target. The offline engine, diagnostics, and regression suite
+are verified, while final acceptance remains open for Top 3 quality, minimum-device real-camera performance,
+manual native-window scenarios, and independent human review of real acceptance images. See
+[`specs/014-composition-pattern-recognition/validation.md`](specs/014-composition-pattern-recognition/validation.md)
+for the detailed evidence and limitations.
+
 ## Roadmap
 
 - [x] **Stage 1 (Offline MVP)**: Process local images with basic Saliency & YOLO detection, and output static compositional score/feedback.
@@ -47,7 +57,7 @@ only its overlay and leaves the viewfinder and capture operations available.
 - [x] **Stage 6 (Pro Optimization)**: Multi-dimensional scoring (5-axis radar), performance throttling (FPS > 25), sliding settings sidebar, and graceful API degradation.
 - [x] **Stage 7 (Progressive Alignment & UX Levels)**: Implemented 4-tier coaching levels, Canny edge background clutter detection, and real-time IoU-based haptic alignment snapping.
 - [x] **Stage 13 (Advanced Photography Heuristics)**: Implemented fast (<15ms) lighting direction, EV warnings via histograms, color contrast checks, leading lines, and dynamic DoF blurring advice using classical CV techniques.
-- [x] **Stage 14 (Offline Composition Recognition)**: Implemented local multi-label recognition for 15 composition modes, stable Top 3 evidence, reachable camera-action guidance, privacy-bounded diagnostics, and independent performance gating.
+- [~] **Stage 14 (Offline Composition Recognition)**: Local 15-mode recognition, guidance, diagnostics, and automated gating are implemented; final Top 3 quality and real-device/manual acceptance remain open.
 
 ## Running the App
 

@@ -55,7 +55,7 @@ def test_calibration_selects_precision_constrained_threshold_and_reports_holdout
     assert holdout.fn == 1
 
     report = build_calibration_report(examples, [CompositionMode.DIAGONAL])
-    assert report["_metadata"]["weight_config_version"] == "initial-rule-weights-v1"
+    assert report["_metadata"]["weight_config_version"] == "reviewed-calibration-v2"
     assert report["_metadata"]["evidence_weights"]["DIAGONAL"] == {
         "dominance": 0.65,
         "coverage": 0.35,

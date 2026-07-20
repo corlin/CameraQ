@@ -357,3 +357,15 @@ GEMINI_API_KEY is not set. Deep AI features will be disabled.
 3. 在 Apple M1 8 核/8GB 或明确等效设备上复跑五分钟基准。
 4. 人工执行 `quickstart.md` 的显示级别、侧栏开关和指定实景，完成 T050 剩余部分。
 5. 上述证据全部达到 SC 后再把规格状态从 Draft 提升为完成。
+
+## 8. 2026-07-20 收敛复验
+
+- 仅使用 `calibration` split 冻结了 15 个模式的进入/退出阈值，配置版本为
+  `reviewed-calibration-v2`；对应单元测试锁定全部阈值，避免后续静默漂移。
+- 隔离 `acceptance` split 复验：宏平均 precision 为 80.50%、recall 为 70.36%，保持 SC-003 通过；
+  Top 3 覆盖为 77/138（55.80%），较默认阈值的 71/138（51.45%）提升，但仍不满足 SC-004 的 85%。
+- `uv run pytest tests/ -q`：190 passed、1 skipped；验收清单审计通过，`git diff --check` 通过。
+
+因此 T052 仍未完成。T053 仍须在最低基准或可接受的等效设备上完成可记录的真实相机/UI 五分钟验证；
+T054 仍须执行 OpenCV 原生窗口中的手工场景；T055 仍须由独立人工完成原图复核。上述项目不得由自动化
+或临时 Codex 预标注替代。

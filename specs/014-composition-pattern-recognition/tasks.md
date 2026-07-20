@@ -281,3 +281,10 @@ T039、T040、T041、T042 可并行编写；T043 与 T044 可在不同文件并�
 - 不得在构图模块中引入网络调用或默认保存原始帧。
 - 不得在实现期间顺带重写现有五轴评分、Gemini Coach 或非 014 UI。
 - 每个用户故事完成后运行其独立测试并形成小而清晰的提交边界。
+
+## Phase 8: Convergence
+
+- [ ] T052 Raise acceptance-set Top 3 coverage to at least 85% without inspecting acceptance labels during tuning; preserve the SC-003 precision/recall baseline, freeze the validated per-mode weights and thresholds, and record the isolated acceptance evidence in `src/core/composition/thresholds.py` and `specs/014-composition-pattern-recognition/validation.md` per SC-004 (partial)
+- [ ] T053 Run the CPU-only five-minute end-to-end composition benchmark on the specified Apple M1 8-core/8GB macOS 14 baseline or documented equivalent using a real camera/UI path; capture FPS, p95 frame interval, and capture/settings p95 response time in `specs/014-composition-pattern-recognition/validation.md` per SC-001 (partial)
+- [ ] T054 Execute and record the remaining real offline camera scenarios from `specs/014-composition-pattern-recognition/quickstart.md`, including named composition scenes, MINIMAL/COACH/PRO visibility, settings toggles, disabled-overlay continuity, recommendation, and stability/scene-change checks per plan: Manual verification (partial)
+- [ ] T055 Obtain independent human original-image review for the real acceptance split and retain reviewer, decision, rationale, provenance, and split-audit evidence before treating quality metrics as final per SC-003 and SC-004 (partial)
