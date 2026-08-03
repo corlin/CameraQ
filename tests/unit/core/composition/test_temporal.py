@@ -73,3 +73,20 @@ def test_scene_change_clears_old_mode_and_allows_new_first_frame():
     )
     assert not visible(changed, CompositionMode.HORIZONTAL)
     assert visible(changed, CompositionMode.VERTICAL)
+
+
+def test_fading_state_recovers_to_active_on_score_resurgence():
+    """T062/F4: FADING → recovery to ACTIVE when score rises back above exit.
+
+    ACTIVE → FADING (one below-exit sample) → ACTIVE (one above-exit sample).
+    """
+    temporal = CompositionTemporalFilter()
+    # first frame: HORIZONTAL HIGH 90 → ACTIVE (enter=75.0, exit=65.0)
+    temporal.update(results(90, CompositionMode.HORIZONTAL), timestamp=0.0)
+    assert visible(temporal.update(results(90, CompositionMode.HORIZONTAL), timestamp=0.1))
+    # drop below exit → FADING (still visible)
+    assert visible(temporal.update(results(60, CompositionMode.HORIZONTAL), timestamp=0.2))
+    # recover above exit → ACTIVE (still visible)
+    assert visible(temporal.update(results(80, CompositionMode.HORIZONTAL), timestamp=0.3))
+    # verify it stays visible through subsequent frames
+    assert visible(temporal.update(results(80, CompositionMode.HORIZONTAL), timestamp=0.4))

@@ -45,6 +45,9 @@ class OverlayRenderer:
         self.ai_coach_last_update = 0.0
         self.ai_coach_message = None
         self.last_layout = {}
+        # EMA-smoothed evidence geometry: keyed by mode, stores (smoothed_points, smoothed_lines, smoothed_contours)
+        self._smooth_geometry: dict = {}
+        self._smooth_alpha = 0.35  # EMA blending factor
         self.scene_icons = {
             "Outdoor": "⛰️ Outdoor",
             "Indoor": "🏠 Indoor",
@@ -102,15 +105,6 @@ class OverlayRenderer:
         ui_overlay = Image.new('RGBA', img_pil.size, (255, 255, 255, 0))
         draw_ov = ImageDraw.Draw(ui_overlay)
 
-        # Draw Rule of Thirds Grid
-        grid_color = (200, 200, 200, 90) # Soft translucent white
-        x1, x2 = w // 3, 2 * w // 3
-        y1, y2 = h // 3, 2 * h // 3
-        draw_ov.line([(x1, 0), (x1, h)], fill=grid_color, width=1)
-        draw_ov.line([(x2, 0), (x2, h)], fill=grid_color, width=1)
-        draw_ov.line([(0, y1), (w, y1)], fill=grid_color, width=1)
-        draw_ov.line([(0, y2), (w, y2)], fill=grid_color, width=1)
-
         # Draw FPS with a subtle background plate
         fps_text = f"FPS: {fps:.1f}"
         bbox = draw_ov.textbbox((10, 10), fps_text, font=self.small_font)
@@ -133,47 +127,120 @@ class OverlayRenderer:
             composition_lines = self._composition_summary(
                 getattr(analysis, "composition_analysis", None), level
             )
-            if level in ("COACH", "PRO"):
-                recommendation_text = self._composition_recommendation_text(
-                    getattr(analysis, "composition_analysis", None)
-                )
-                if recommendation_text:
-                    composition_lines.append(recommendation_text)
+            # Draw composition state panel (informational, not actionable)
             if composition_lines:
                 y_composition = 48
-                metrics = [draw_ov.textbbox((0, 0), line, font=self.small_font) for line in composition_lines]
+                # Add header line
+                header = "构图"
+                header_bbox = draw_ov.textbbox((0, 0), header, font=self.small_font)
+                header_h = header_bbox[3] - header_bbox[1]
+                all_lines = [header] + composition_lines
+                metrics = [draw_ov.textbbox((0, 0), line, font=self.small_font) for line in all_lines]
                 widths = [bbox[2] - bbox[0] for bbox in metrics]
-                line_height = max((bbox[3] - bbox[1] for bbox in metrics), default=19) + 8
+                line_height = max((bbox[3] - bbox[1] for bbox in metrics), default=19) + 6
                 box_width = max(widths, default=0) + 20
-                box_height = len(composition_lines) * line_height + 10
+                box_height = len(all_lines) * line_height + 8
                 composition_rect = (10, y_composition, 10 + box_width, y_composition + box_height)
                 draw_ov.rounded_rectangle(
                     composition_rect,
                     radius=8,
-                    fill=(0, 0, 0, 150),
+                    fill=(0, 0, 0, 160),
                     outline=(255, 215, 0, 130),
                     width=1,
                 )
+                # Header row — muted, smaller
+                draw_ov.text(
+                    (20, y_composition + 4), header,
+                    font=self.small_font, fill=(180, 180, 180, 200),
+                )
+                # Separator line below header
+                sep_y = y_composition + header_h + 8
+                draw_ov.line(
+                    [(20, sep_y), (10 + box_width - 10, sep_y)],
+                    fill=(255, 215, 0, 60), width=1,
+                )
                 for index, line in enumerate(composition_lines):
                     draw_ov.text(
-                        (20, y_composition + 5 + index * line_height),
+                        (20, sep_y + 4 + index * line_height),
                         line,
                         font=self.small_font,
                         fill=(255, 230, 150, 255),
                     )
                 self.last_layout["composition"] = composition_rect
                 top_overlay_bottom = max(top_overlay_bottom, composition_rect[3])
-            if level == "PRO":
-                geometry = self._composition_evidence_geometry(
-                    getattr(analysis, "composition_analysis", None), w, h
+            # Separate recommendation pill — visually distinct from composition panel
+            if level in ("COACH", "PRO"):
+                recommendation_text = self._composition_recommendation_text(
+                    getattr(analysis, "composition_analysis", None)
                 )
-                for p1, p2 in geometry["lines"]:
-                    draw_ov.line([p1, p2], fill=(255, 215, 0, 150), width=2)
-                for x, y in geometry["points"]:
-                    draw_ov.ellipse([x - 4, y - 4, x + 4, y + 4], fill=(255, 215, 0, 210))
-                for contour in geometry["contours"]:
-                    if len(contour) >= 2:
-                        draw_ov.line(contour + [contour[0]], fill=(255, 215, 0, 120), width=2)
+                if recommendation_text:
+                    rec_bbox = draw_ov.textbbox((0, 0), recommendation_text, font=self.font)
+                    rec_w = rec_bbox[2] - rec_bbox[0]
+                    rec_h = rec_bbox[3] - rec_bbox[1]
+                    rec_x = (w - rec_w) // 2 - 10
+                    rec_y = top_overlay_bottom + 12
+                    rec_rect = (rec_x, rec_y, rec_x + rec_w + 20, rec_y + rec_h + 16)
+                    draw_ov.rounded_rectangle(
+                        rec_rect,
+                        radius=10,
+                        fill=(0, 40, 0, 200),
+                        outline=(0, 220, 80, 220),
+                        width=2,
+                    )
+                    draw_ov.text(
+                        (rec_x + 10, rec_y + 8),
+                        recommendation_text,
+                        font=self.font,
+                        fill=(0, 255, 100, 255),
+                    )
+                    self.last_layout["recommendation"] = rec_rect
+                    top_overlay_bottom = max(top_overlay_bottom, rec_rect[3])
+            if level == "PRO":
+                comp = getattr(analysis, "composition_analysis", None)
+                geometry = self._composition_evidence_geometry(comp, w, h)
+                # --- mode evidence (smoothed) ---
+                smoothed = self._smooth_and_prune_evidence(geometry)
+                for key, (alpha, fill_color) in self._evidence_styles(smoothed, comp):
+                    for p1, p2 in smoothed[key].get("lines", []):
+                        draw_ov.line([p1, p2], fill=fill_color + (alpha,), width=2)
+                    for x, y in smoothed[key].get("points", []):
+                        draw_ov.ellipse(
+                            [x - 4, y - 4, x + 4, y + 4],
+                            fill=fill_color + (min(255, int(alpha * 1.4)),),
+                        )
+                    for contour in smoothed[key].get("contours", []):
+                        if len(contour) >= 2:
+                            draw_ov.line(
+                                contour + [contour[0]],
+                                fill=fill_color + (min(255, int(alpha * 0.8)),),
+                                width=2,
+                            )
+                # --- recommendation directional arrow / KEEP check ---
+                if comp and comp.recommendation:
+                    if comp.recommendation.action.value == "KEEP":
+                        self._draw_keep_indicator(draw_ov, w, h)
+                    else:
+                        self._draw_recommendation_arrow(
+                            draw_ov, w, h, comp.recommendation.action.value
+                        )
+                        # Connecting guide line from recommendation pill to arrow
+                        if "recommendation" in self.last_layout:
+                            rec_rect = self.last_layout["recommendation"]
+                            arr_info = self.ARROW_POSITIONS.get(
+                                comp.recommendation.action.value
+                            )
+                            if arr_info:
+                                _, _, pos_fn = arr_info
+                                ax, ay = pos_fn(w, h)
+                                arr_cx = ax + 40   # arrow pill center
+                                arr_cy = ay + 26
+                                rec_cx = (rec_rect[0] + rec_rect[2]) // 2
+                                rec_cy = rec_rect[3]
+                                draw_ov.line(
+                                    [(rec_cx, rec_cy), (arr_cx, arr_cy)],
+                                    fill=(0, 220, 80, 80),
+                                    width=1,
+                                )
             
             # Draw subject bounding boxes and labels
             if level == "PRO" and hasattr(analysis, 'subjects') and analysis.subjects:
@@ -355,36 +422,38 @@ class OverlayRenderer:
                             draw_ov.text((x_ai, y_ai), collapsed_text, font=self.small_font, fill=(200, 200, 200, 255))
                             self.last_layout["ai_coaching"] = ai_rect
                     
-                    # T003: Render Ghost Composition Box
-                    target_box = getattr(ai, 'target_box', None)
-                    if target_box:
-                        tx1, ty1, tx2, ty2 = target_box
-                        if getattr(ai, 'perfect_alignment', False):
-                            # Solid golden border for perfect alignment "snap"
-                            draw_ov.rectangle([tx1, ty1, tx2, ty2], fill=(255, 215, 0, 40), outline=(255, 215, 0, 255), width=3)
-                            # Add "✨ ALIGNED" text below the box
-                            snap_text = "✨ ALIGNED"
-                            draw_ov.text((tx1 + (tx2-tx1)//2 - 40, ty2 + 10), snap_text, font=self.small_font, fill=(255, 215, 0, 255))
-                        else:
-                            # Semi-transparent fill with dashed-like border
-                            draw_ov.rectangle([tx1, ty1, tx2, ty2], fill=(255, 255, 255, 40), outline=(255, 255, 255, 180), width=2)
-                        
-                    # T004: Render Directional Arrows
-                    arrows = getattr(ai, 'directional_arrows', [])
-                    if arrows:
-                        arrow_map = {
-                            "LEFT": ("←", 30, h//2),
-                            "RIGHT": ("→", w - 60, h//2),
-                            "UP": ("↑", w//2, 80),
-                            "DOWN": ("↓", w//2, h - 120),
-                            "FORWARD": ("⇡", w//2 - 40, h//2),
-                            "BACKWARD": ("⇣", w//2 + 40, h//2)
-                        }
-                        for arrow in arrows:
-                            if arrow in arrow_map:
-                                symbol, ax, ay = arrow_map[arrow]
-                                draw_ov.rectangle([ax - 10, ay - 10, ax + 40, ay + 40], fill=(0, 0, 0, 150), outline=(200, 200, 200, 100), width=1)
-                                draw_ov.text((ax, ay), symbol, font=self.font, fill=(255, 255, 255, 255))
+                    # T003/T004: AI coach ghost box + arrows — suppressed when
+                    # the composition engine has its own recommendation active.
+                    comp_active = (
+                        getattr(analysis, "composition_analysis", None) is not None
+                        and analysis.composition_analysis.recommendation is not None
+                        and analysis.composition_analysis.recommendation.action.value != "KEEP"
+                    )
+                    if not comp_active:
+                        target_box = getattr(ai, 'target_box', None)
+                        if target_box:
+                            tx1, ty1, tx2, ty2 = target_box
+                            if getattr(ai, 'perfect_alignment', False):
+                                draw_ov.rectangle([tx1, ty1, tx2, ty2], fill=(255, 215, 0, 40), outline=(255, 215, 0, 255), width=3)
+                                snap_text = "✨ ALIGNED"
+                                draw_ov.text((tx1 + (tx2-tx1)//2 - 40, ty2 + 10), snap_text, font=self.small_font, fill=(255, 215, 0, 255))
+                            else:
+                                draw_ov.rectangle([tx1, ty1, tx2, ty2], fill=(255, 255, 255, 40), outline=(255, 255, 255, 180), width=2)
+                        arrows = getattr(ai, 'directional_arrows', [])
+                        if arrows:
+                            arrow_map = {
+                                "LEFT": ("←", 30, h//2),
+                                "RIGHT": ("→", w - 60, h//2),
+                                "UP": ("↑", w//2, 80),
+                                "DOWN": ("↓", w//2, h - 120),
+                                "FORWARD": ("⇡", w//2 - 40, h//2),
+                                "BACKWARD": ("⇣", w//2 + 40, h//2)
+                            }
+                            for arrow in arrows:
+                                if arrow in arrow_map:
+                                    symbol, ax, ay = arrow_map[arrow]
+                                    draw_ov.rectangle([ax - 10, ay - 10, ax + 40, ay + 40], fill=(0, 0, 0, 150), outline=(200, 200, 200, 100), width=1)
+                                    draw_ov.text((ax, ay), symbol, font=self.font, fill=(255, 255, 255, 255))
                     
             # Draw Scene Context
             if getattr(analysis, 'current_scene_context', None):
@@ -466,8 +535,10 @@ class OverlayRenderer:
         if composition is None or level == "OFF":
             return []
         if composition.insufficient_evidence:
-            return ["构图：证据不足"]
+            return ["证据不足"]
         modes = list(composition.top_modes)
+        if not modes:
+            return ["未发现构图模式"]
         if level == "MINIMAL":
             modes = modes[:1]
         elif level in ("COACH", "PRO"):
@@ -480,9 +551,9 @@ class OverlayRenderer:
             label = self.COMPOSITION_LABELS.get(mode.value, mode.value)
             if level == "PRO":
                 item = by_mode[mode]
-                lines.append(f"构图：{label} {item.match_score:.0f} · {item.confidence.value}")
+                lines.append(f"{label} {item.match_score:.0f} · {item.confidence.value}")
             else:
-                lines.append(f"构图：{label}")
+                lines.append(label)
         return lines
 
     def _composition_recommendation_text(self, composition) -> Optional[str]:
@@ -507,19 +578,25 @@ class OverlayRenderer:
         return f"建议：{action} · {mode}"
 
     def _composition_evidence_geometry(self, composition, width: int, height: int):
-        geometry = {"points": [], "lines": [], "contours": []}
+        """Return per-mode evidence geometry keyed by mode name.
+
+        Only collects evidence for modes that are visible and have evidence items.
+        """
+        geometry: dict[str, dict[str, list]] = {}
         if composition is None:
             return geometry
         by_mode = {result.mode: result for result in composition.mode_results}
         for mode in composition.top_modes:
             item = by_mode.get(mode)
-            if item is None or not item.is_visible:
+            if item is None or not item.is_visible or not item.evidence:
                 continue
+            key = mode.value
+            geo = {"points": [], "lines": [], "contours": []}
             for evidence in item.evidence:
-                geometry["points"].extend(
+                geo["points"].extend(
                     (round(value.x * width), round(value.y * height)) for value in evidence.points
                 )
-                geometry["lines"].extend(
+                geo["lines"].extend(
                     (
                         (round(value.p1.x * width), round(value.p1.y * height)),
                         (round(value.p2.x * width), round(value.p2.y * height)),
@@ -527,10 +604,144 @@ class OverlayRenderer:
                     for value in evidence.lines
                 )
                 if evidence.contour:
-                    geometry["contours"].append(
+                    geo["contours"].append(
                         [(round(value.x * width), round(value.y * height)) for value in evidence.contour]
                     )
+            geometry[key] = geo
         return geometry
+
+    def _smooth_and_prune_evidence(self, geometry: dict) -> dict:
+        """EMA-smooth evidence coordinates and prune stale modes."""
+        alpha = self._smooth_alpha
+        smoothed: dict[str, dict[str, list]] = {}
+        active_keys = set(geometry.keys())
+        # Drop stale keys
+        stale = [k for k in self._smooth_geometry if k not in active_keys]
+        for k in stale:
+            del self._smooth_geometry[k]
+
+        for key, geo in geometry.items():
+            prev = self._smooth_geometry.get(key, {})
+            prev_lines = prev.get("lines", [])
+            prev_points = prev.get("points", [])
+            prev_contours = prev.get("contours", [])
+
+            # line smoothing
+            new_lines = []
+            for i, line in enumerate(geo.get("lines", [])):
+                if i < len(prev_lines):
+                    p1x = alpha * line[0][0] + (1 - alpha) * prev_lines[i][0][0]
+                    p1y = alpha * line[0][1] + (1 - alpha) * prev_lines[i][0][1]
+                    p2x = alpha * line[1][0] + (1 - alpha) * prev_lines[i][1][0]
+                    p2y = alpha * line[1][1] + (1 - alpha) * prev_lines[i][1][1]
+                    new_lines.append(((round(p1x), round(p1y)), (round(p2x), round(p2y))))
+                else:
+                    new_lines.append(line)
+            # point smoothing
+            new_points = []
+            for i, pt in enumerate(geo.get("points", [])):
+                if i < len(prev_points):
+                    px = alpha * pt[0] + (1 - alpha) * prev_points[i][0]
+                    py = alpha * pt[1] + (1 - alpha) * prev_points[i][1]
+                    new_points.append((round(px), round(py)))
+                else:
+                    new_points.append(pt)
+            # contours: just keep the latest (contours change topology, smoothing doesn't help)
+            new_contours = geo.get("contours", [])
+
+            result = {
+                "lines": new_lines,
+                "points": new_points,
+                "contours": new_contours,
+            }
+            smoothed[key] = result
+            self._smooth_geometry[key] = result
+
+        return smoothed
+
+    def _evidence_styles(self, smoothed: dict, composition):
+        """Yield (mode_key, (alpha, fill_color)) for each mode's evidence.
+
+        Priority: recommendation target mode gets green; Top 1 gets gold;
+        remaining modes get faded gold.
+        """
+        if not smoothed or composition is None:
+            return
+
+        target_mode = None
+        if composition.recommendation and composition.recommendation.action.value != "KEEP":
+            target_mode = composition.recommendation.target_mode.value
+
+        # Sort: target mode first, then Top 3 order
+        order = list(composition.top_modes)
+        ordered_keys = []
+        for mode in order:
+            key = mode.value
+            if key in smoothed:
+                ordered_keys.append(key)
+        # Move target to front
+        if target_mode and target_mode in ordered_keys:
+            ordered_keys.remove(target_mode)
+            ordered_keys.insert(0, target_mode)
+
+        for idx, key in enumerate(ordered_keys):
+            if key == target_mode:
+                yield key, (200, (0, 220, 80))      # bright green, full alpha
+            elif idx == 0:
+                yield key, (140, (255, 215, 0))      # gold, medium alpha
+            elif idx == 1:
+                yield key, (60, (255, 215, 0))       # gold, low alpha
+            else:
+                yield key, (30, (255, 215, 0))       # gold, minimal alpha
+
+    ARROW_POSITIONS = {
+        "MOVE_LEFT":    ("◀", "向左", lambda w, h: (60, h // 2 - 30)),
+        "MOVE_RIGHT":   ("▶", "向右", lambda w, h: (w - 120, h // 2 - 30)),
+        "TILT_UP":      ("▲", "向上", lambda w, h: (w // 2 - 50, 70)),
+        "TILT_DOWN":    ("▼", "向下", lambda w, h: (w // 2 - 50, h - 140)),
+        "ROTATE_CLOCKWISE":        ("⟳", "顺时针旋转", lambda w, h: (w - 150, h - 120)),
+        "ROTATE_COUNTERCLOCKWISE": ("⟲", "逆时针旋转", lambda w, h: (w - 150, h - 120)),
+        "MOVE_CLOSER":  ("＋", "靠近主体", lambda w, h: (w // 2 - 50, h - 140)),
+        "MOVE_BACK":    ("－", "远离主体", lambda w, h: (w // 2 - 50, 70)),
+    }
+
+    def _draw_recommendation_arrow(self, draw_ov, w: int, h: int, action: str):
+        info = self.ARROW_POSITIONS.get(action)
+        if info is None:
+            return
+        symbol, label, pos_fn = info
+        x, y = pos_fn(w, h)
+        # Measure label width for pill sizing
+        label_bbox = draw_ov.textbbox((0, 0), label, font=self.small_font)
+        label_w = label_bbox[2] - label_bbox[0]
+        pill_w = max(90, label_w + 30)
+        # Pill background
+        draw_ov.rounded_rectangle(
+            [x - 8, y - 6, x + pill_w, y + 58],
+            radius=14,
+            fill=(0, 30, 0, 200),
+            outline=(0, 220, 80, 220),
+            width=3,
+        )
+        # Large direction symbol (center-top)
+        sym_bbox = draw_ov.textbbox((0, 0), symbol, font=self.font)
+        sym_w = sym_bbox[2] - sym_bbox[0]
+        draw_ov.text((x + (pill_w + 8 - sym_w) // 2, y), symbol, font=self.font, fill=(0, 255, 80, 250))
+        # Chinese label below symbol (center-bottom)
+        draw_ov.text((x + (pill_w + 8 - label_w) // 2, y + 32), label, font=self.small_font, fill=(0, 220, 100, 240))
+
+    def _draw_keep_indicator(self, draw_ov, w: int, h: int):
+        """Green checkmark indicator when composition is optimal (KEEP)."""
+        x, y = w - 80, h // 2 - 35
+        draw_ov.rounded_rectangle(
+            [x - 8, y - 6, x + 60, y + 66],
+            radius=14,
+            fill=(0, 35, 0, 200),
+            outline=(0, 220, 80, 200),
+            width=3,
+        )
+        draw_ov.text((x + 4, y + 2), "✓", font=self.font, fill=(0, 255, 80, 250))
+        draw_ov.text((x + 14, y + 36), "保持", font=self.small_font, fill=(0, 220, 100, 240))
 
     def _draw_sidebar(self, draw_ov, w, h):
         sidebar_w = 320

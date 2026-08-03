@@ -14,3 +14,5 @@ dist/
 .superpowers/
 config.json
 *.pt
+# Live camera captures — raw viewfinder frames MUST NOT be committed (Constitution)
+specs/*/evidence/live-camera-capture.png

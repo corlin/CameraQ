@@ -12,6 +12,7 @@ class ModeTemporalRecord:
     state: str = "ABSENT"
     above_enter_count: int = 0
     below_exit_count: int = 0
+    fading_since: float = 0.0
     state_since: float = 0.0
 
 
@@ -59,13 +60,26 @@ class CompositionTemporalFilter:
                     else display_exit_threshold
                 )
                 if item.match_score < active_exit_threshold:
+                    record.state = "FADING"
+                    record.below_exit_count = 1
+                    record.fading_since = timestamp
+                else:
+                    record.below_exit_count = 0
+            elif record.state == "FADING":
+                active_exit_threshold = (
+                    exit_threshold
+                    if high_evidence
+                    else display_exit_threshold
+                )
+                if item.match_score >= active_exit_threshold:
+                    record.state = "ACTIVE"
+                    record.below_exit_count = 0
+                else:
                     record.below_exit_count += 1
                     if record.below_exit_count >= 3:
                         record.state = "ABSENT"
                         record.state_since = timestamp
                         record.above_enter_count = 0
-                else:
-                    record.below_exit_count = 0
             elif display_evidence and (
                 high_evidence and item.match_score >= enter_threshold
                 or item.confidence is CompositionConfidence.MEDIUM
@@ -82,7 +96,7 @@ class CompositionTemporalFilter:
                 record.above_enter_count = 0
                 record.below_exit_count = 0
 
-            visible = record.state == "ACTIVE"
+            visible = record.state in ("ACTIVE", "FADING")
             stable_ms = max(0, int((timestamp - record.state_since) * 1000)) if visible else 0
             output.append(item.model_copy(update={"is_visible": visible, "stable_for_ms": stable_ms}))
         self._has_seen_frame = True

@@ -146,13 +146,22 @@ def render_ui_evidence(output_dir: str | Path) -> dict[str, Path]:
         if not cv2.imwrite(str(path), rendered):
             raise RuntimeError(f"failed to write {path}")
         paths[state] = path
-        geometry = renderer._composition_evidence_geometry(composition, 1280, 720)
+        # Match overlay.draw() behaviour: recommendation only in COACH/PRO,
+        # evidence geometry only in PRO (lines 136–141, 166 of overlay.py)
+        has_recommendation = level in ("COACH", "PRO") and renderer._composition_recommendation_text(composition) is not None
+        if level == "PRO":
+            geometry = renderer._composition_evidence_geometry(composition, 1280, 720)
+            total_lines = sum(len(geo["lines"]) for geo in geometry.values())
+            total_points = sum(len(geo["points"]) for geo in geometry.values())
+            total_contours = sum(len(geo["contours"]) for geo in geometry.values())
+        else:
+            total_lines = total_points = total_contours = 0
         report[state] = {
             "composition_lines": len(renderer._composition_summary(composition, level)),
-            "has_recommendation": renderer._composition_recommendation_text(composition) is not None,
-            "evidence_lines": len(geometry["lines"]),
-            "evidence_points": len(geometry["points"]),
-            "evidence_contours": len(geometry["contours"]),
+            "has_recommendation": has_recommendation,
+            "evidence_lines": total_lines,
+            "evidence_points": total_points,
+            "evidence_contours": total_contours,
         }
 
     settings.coaching_level = "COACH"

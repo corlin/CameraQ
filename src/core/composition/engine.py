@@ -13,17 +13,7 @@ from .scorers.position import score_position_modes
 from .scorers.topology import score_topology_modes
 from .recommender import CompositionRecommender
 from .temporal import CompositionTemporalFilter
-from .thresholds import INSUFFICIENT_EVIDENCE_QUALITY
-
-
-TOP_MODE_RANKING_BONUS = {
-    CompositionMode.CENTRIPETAL: 25.0,
-    CompositionMode.RADIAL: 25.0,
-    CompositionMode.CROSS: 25.0,
-    CompositionMode.DIAGONAL: 25.0,
-    CompositionMode.CURVE: 25.0,
-    CompositionMode.VERTICAL: 25.0,
-}
+from .thresholds import INSUFFICIENT_EVIDENCE_QUALITY, SCENE_CHANGE_THRESHOLD, TOP_MODE_RANKING_BONUS
 
 
 def _top_mode_rank_score(item) -> float:
@@ -54,7 +44,7 @@ class CompositionEngine:
         current_gray = np.asarray(features.gray)
         scene_changed = False
         if self._previous_gray is not None and self._previous_gray.shape == current_gray.shape:
-            scene_changed = float(np.mean(cv2.absdiff(self._previous_gray, current_gray))) > 5.0
+            scene_changed = float(np.mean(cv2.absdiff(self._previous_gray, current_gray))) > SCENE_CHANGE_THRESHOLD
         self._previous_gray = current_gray.copy()
         results = self.temporal.update(
             results,

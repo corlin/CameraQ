@@ -288,3 +288,16 @@ T039、T040、T041、T042 可并行编写；T043 与 T044 可在不同文件并�
 - [ ] T053 Run the CPU-only five-minute end-to-end composition benchmark on the specified Apple M1 8-core/8GB macOS 14 baseline or documented equivalent using a real camera/UI path; capture FPS, p95 frame interval, and capture/settings p95 response time in `specs/014-composition-pattern-recognition/validation.md` per SC-001 (partial)
 - [ ] T054 Execute and record the remaining real offline camera scenarios from `specs/014-composition-pattern-recognition/quickstart.md`, including named composition scenes, MINIMAL/COACH/PRO visibility, settings toggles, disabled-overlay continuity, recommendation, and stability/scene-change checks per plan: Manual verification (partial)
 - [ ] T055 Obtain independent human original-image review for the real acceptance split and retain reviewer, decision, rationale, provenance, and split-audit evidence before treating quality metrics as final per SC-003 and SC-004 (partial)
+
+## Phase 9: Convergence (2026-08-01 audit)
+
+- [x] T056 [F1] Render explicit "未发现明确构图模式" message when evidence quality is adequate but no mode reaches display threshold, instead of silent empty Top 3; add overlay test for this state per FR-004/US1 scenario 2 (partial)
+- [x] T057 [F3] Detect dominant non-actionable high-confidence mode (CROSS/TRIANGLE/CURVE/CHECKERBOARD) and emit KEEP or suppress movement suggestions before suggesting weaker actionable modes per US2 scenario 2 / plan §6 (contradicts)
+- [x] T058 [F5] Add structure-preservation guard for MOVE_CLOSER/MOVE_BACK to verify enlarging/moving subject won't destroy existing frame/tunnel/balance evidence; implement candidate-transform validation per plan §6 (partial)
+- [x] T059 [F9] Remove or gitignore `specs/014-composition-pattern-recognition/evidence/live-camera-capture.png`; raw viewfinder frames MUST NOT be committed to repo per Constitution "技术、隐私与数据约束" (contradicts)
+- [x] T060 [F7] Fix `scripts/render_composition_ui_evidence.py` to measure per-level rendering accurately — MINIMAL/COACH evidence JSON claims recommendation and evidence geometry that `overlay.draw()` does not actually render at those levels; regenerate evidence JSON + PNGs (contradicts)
+- [x] T061 [F2] Documented: FR-014 is satisfied by the data layer — `CompositionAnalysis.mode_results` always carries all 15 `CompositionModeResult` entries with match_score, confidence, and evidence. The viewfinder overlay renders Top 3 for legibility; the full 15-mode output is available through the JSON contract (`contracts/composition-analysis.schema.json`) and diagnostics NDJSON. No UI change needed. (partial)
+- [x] T062 [F4] Implement FADING temporal state with recovery-to-ACTIVE path, or update data-model.md/tasks.md to reflect the actual 3-state (ABSENT/CANDIDATE/ACTIVE) design per plan §5 / data-model.md (partial)
+- [x] T063 [F6] Allow line-mode rotation suggestions when `primary_focus is None` but a dominant line family exists per plan §6 / US2 scenario 3 (partial)
+- [x] T064 [F8] Move ranking bonus constants and scene-change threshold from `engine.py` into `thresholds.py` per plan §4 centralisation (partial)
+- [x] T065 [F10] Add missing test coverage: F1 "未发现明确构图模式" state, F4 FADING recovery path, F6 no-focus line rotation (missing)

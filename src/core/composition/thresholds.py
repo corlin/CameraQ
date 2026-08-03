@@ -7,7 +7,7 @@ ENTER_SCORE = 65.0
 EXIT_SCORE = 55.0
 DISPLAY_ENTER_SCORE = 45.0
 DISPLAY_EXIT_SCORE = 35.0
-WEIGHT_CONFIG_VERSION = "reviewed-calibration-v2"
+WEIGHT_CONFIG_VERSION = "reviewed-calibration-v3"
 MODE_ENTER_SCORES = {
     CompositionMode.RULE_OF_THIRDS: 59.46,
     CompositionMode.DYNAMIC_SYMMETRY: 50.86,
@@ -43,7 +43,11 @@ MODE_EXIT_SCORES = {
     CompositionMode.VERTICAL: 13.38,
 }
 MODE_DISPLAY_ENTER_SCORES = {mode: DISPLAY_ENTER_SCORE for mode in CompositionMode}
-MODE_DISPLAY_EXIT_SCORES = {mode: DISPLAY_EXIT_SCORE for mode in CompositionMode}
+MODE_DISPLAY_ENTER_SCORES[CompositionMode.TRIANGLE] = 38.0
+MODE_DISPLAY_EXIT_SCORES = {
+    mode: max(10.0, score - 10.0)
+    for mode, score in MODE_DISPLAY_ENTER_SCORES.items()
+}
 MODE_EVIDENCE_WEIGHTS: dict[CompositionMode, dict[str, float]] = {
     CompositionMode.RULE_OF_THIRDS: {"node": 1.0, "line": 0.82},
     CompositionMode.DYNAMIC_SYMMETRY: {"line": 0.70, "focus": 0.30},
@@ -70,6 +74,15 @@ MIN_VISIBLE_CONFIDENCE = 0.45
 INSUFFICIENT_EVIDENCE_QUALITY = 0.18
 MIN_LINE_LENGTH_RATIO = 0.16
 MAX_LINE_GAP_RATIO = 0.03
+SCENE_CHANGE_THRESHOLD = 5.0
+TOP_MODE_RANKING_BONUS: dict[CompositionMode, float] = {
+    CompositionMode.CENTRIPETAL: 25.0,
+    CompositionMode.RADIAL: 25.0,
+    CompositionMode.CROSS: 25.0,
+    CompositionMode.DIAGONAL: 25.0,
+    CompositionMode.CURVE: 25.0,
+    CompositionMode.VERTICAL: 25.0,
+}
 
 
 def enter_score(mode: CompositionMode) -> float:

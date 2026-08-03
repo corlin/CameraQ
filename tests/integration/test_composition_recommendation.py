@@ -33,4 +33,9 @@ def test_engine_supports_rotation_and_existing_structure_alignment():
 
 def test_engine_suppresses_recommendation_without_actionable_focus():
     result = CompositionEngine().analyze(line_image((20,)), [], None, timestamp=1)
-    assert result.recommendation is None
+    # Without subjects or saliency but with strong line evidence, the
+    # recommender may emit KEEP (per T063 no-focus line rotation path).
+    # The critical invariant: no directional movement suggestion without
+    # a focus point to anchor it.
+    if result.recommendation is not None:
+        assert result.recommendation.action is CompositionAction.KEEP

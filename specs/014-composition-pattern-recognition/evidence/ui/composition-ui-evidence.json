@@ -3,17 +3,17 @@
   "source": "deterministic synthetic UI validation scene",
   "minimal": {
     "composition_lines": 1,
-    "has_recommendation": true,
-    "evidence_lines": 1,
-    "evidence_points": 1,
-    "evidence_contours": 1
+    "has_recommendation": false,
+    "evidence_lines": 0,
+    "evidence_points": 0,
+    "evidence_contours": 0
   },
   "coach": {
     "composition_lines": 3,
     "has_recommendation": true,
-    "evidence_lines": 1,
-    "evidence_points": 1,
-    "evidence_contours": 1
+    "evidence_lines": 0,
+    "evidence_points": 0,
+    "evidence_contours": 0
   },
   "pro": {
     "composition_lines": 3,

@@ -125,3 +125,25 @@ def test_rotation_direction_is_invariant_to_hough_endpoint_order():
         recommender.recommend(negative, mode_results(CompositionMode.OBLIQUE, score=70)).action
         is CompositionAction.ROTATE_CLOCKWISE
     )
+
+
+def test_no_focus_line_rotation_suggests_rotate_or_keep():
+    """T063/F6: line-mode rotation without primary_focus."""
+    features = CompositionFeatureExtractor().extract(line_image((18,)), [], None)
+    recommender = CompositionRecommender()
+    recommendation = recommender.recommend(features, mode_results(CompositionMode.OBLIQUE, score=70))
+    assert recommendation is not None
+    assert recommendation.action in {
+        CompositionAction.ROTATE_CLOCKWISE,
+        CompositionAction.ROTATE_COUNTERCLOCKWISE,
+        CompositionAction.KEEP,
+    }
+
+
+def test_no_focus_near_max_score_returns_keep():
+    """T063: near-max line score without focus → KEEP (can't project improvement)."""
+    features = CompositionFeatureExtractor().extract(line_image((8,)), [], None)
+    recommender = CompositionRecommender()
+    recommendation = recommender.recommend(features, mode_results(CompositionMode.HORIZONTAL, score=99))
+    assert recommendation is not None
+    assert recommendation.action is CompositionAction.KEEP

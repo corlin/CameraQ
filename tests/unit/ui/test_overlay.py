@@ -77,7 +77,15 @@ def composition_analysis(top_modes=(), insufficient=False):
 def test_composition_summary_handles_absent_and_insufficient_states():
     renderer = OverlayRenderer()
     assert renderer._composition_summary(None, "COACH") == []
-    assert renderer._composition_summary(composition_analysis(insufficient=True), "COACH") == ["构图：证据不足"]
+    assert renderer._composition_summary(composition_analysis(insufficient=True), "COACH") == ["证据不足"]
+
+
+def test_composition_summary_shows_no_pattern_when_top_modes_empty():
+    """T056/F1: adequate evidence but no mode reaches display threshold."""
+    renderer = OverlayRenderer()
+    # empty top_modes, not insufficient → "未发现明确构图模式"
+    analysis = composition_analysis(())
+    assert renderer._composition_summary(analysis, "COACH") == ["未发现构图模式"]
 
 
 def test_composition_summary_is_bounded_by_coaching_level():
@@ -125,15 +133,16 @@ def test_pro_evidence_geometry_maps_normalized_coordinates_to_frame():
     renderer = OverlayRenderer()
     analysis = composition_analysis((CompositionMode.DIAGONAL,))
     geometry = renderer._composition_evidence_geometry(analysis, width=600, height=400)
-    assert geometry["lines"] == [((0, 0), (600, 400))]
-    assert geometry["points"] == []
+    assert "DIAGONAL" in geometry
+    assert geometry["DIAGONAL"]["lines"] == [((0, 0), (600, 400))]
+    assert geometry["DIAGONAL"]["points"] == []
 
 
 def test_non_visible_mode_evidence_is_not_rendered():
     renderer = OverlayRenderer()
     analysis = composition_analysis(())
     geometry = renderer._composition_evidence_geometry(analysis, width=600, height=400)
-    assert geometry == {"points": [], "lines": [], "contours": []}
+    assert geometry == {}
 
 
 def test_sidebar_exposes_composition_controls_and_clear_action():
