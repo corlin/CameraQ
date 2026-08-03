@@ -423,6 +423,89 @@ def _triangle(features: CompositionFeatures):
         )
     structure_strength = oblique_strength * largest_solidity
     strength = max(silhouette_strength, structure_strength)
+
+    # Line-triangle: 3 oblique lines whose pairwise intersections form a
+    # closed triangle.  Requires meaningful line lengths and a central,
+    # well-proportioned triangle — avoids the false-positive problem of
+    # the earlier intersection-exhaustive approach.
+    line_triangle_strength = 0.0
+    line_triangle_pts = None
+    oblique_lines = [
+        line for line in features.lines
+        if 15 <= line.angle <= 75 and line.length >= 0.18
+    ]
+    if len(oblique_lines) >= 3:
+        # Build intersection map for oblique lines only
+        line_intersections: dict[int, list[tuple[int, tuple[float, float]]]] = {}
+        for i, li in enumerate(oblique_lines):
+            for j, lj in enumerate(oblique_lines):
+                if j <= i:
+                    continue
+                    # compute line-line intersection
+                x1, y1, x2, y2 = li.x1, li.y1, li.x2, li.y2
+                x3, y3, x4, y4 = lj.x1, lj.y1, lj.x2, lj.y2
+                denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+                if abs(denom) < 1e-9:
+                    continue
+                px = ((x1*y2 - y1*x2)*(x3 - x4) - (x1 - x2)*(x3*y4 - y3*x4)) / denom
+                py = ((x1*y2 - y1*x2)*(y3 - y4) - (y1 - y2)*(x3*y4 - y3*x4)) / denom
+                if not (0.05 <= px <= 0.95 and 0.05 <= py <= 0.95):
+                    continue
+                line_intersections.setdefault(i, []).append((j, (px, py)))
+                line_intersections.setdefault(j, []).append((i, (px, py)))
+
+        # Find triplets (i,j,k) where each pair has an intersection
+        for i in line_intersections:
+            for j_entry in line_intersections[i]:
+                j = j_entry[0]
+                if j <= i:
+                    continue
+                for k_entry in line_intersections[i]:
+                    k = k_entry[0]
+                    if k <= j:
+                        continue
+                    # Check j-k intersection exists
+                    jk_found = any(e[0] == k for e in line_intersections.get(j, []))
+                    if not jk_found:
+                        continue
+                    # Get the 3 intersection points
+                    p_ij = j_entry[1]
+                    p_ik = k_entry[1]
+                    p_jk = next(e[1] for e in line_intersections[j] if e[0] == k)
+                    # Triangle area
+                    a = math.dist(p_ij, p_ik)
+                    b = math.dist(p_ik, p_jk)
+                    c = math.dist(p_jk, p_ij)
+                    s = (a + b + c) / 2
+                    area = max(0.0, s * (s - a) * (s - b) * (s - c)) ** 0.5
+                    if not (0.03 <= area <= 0.22):
+                        continue
+                    # Centrality
+                    cx = (p_ij[0] + p_ik[0] + p_jk[0]) / 3
+                    cy = (p_ij[1] + p_ik[1] + p_jk[1]) / 3
+                    centrality = max(0.0, 1.0 - math.dist((cx, cy), (0.5, 0.5)) / 0.28)
+                    if centrality < 0.3:
+                        continue
+                    # Line quality: average length of the 3 lines
+                    avg_len = (oblique_lines[i].length + oblique_lines[j].length + oblique_lines[k].length) / 3
+                    line_quality = min(1.0, avg_len / 0.40)
+                    # Shape: avoid degenerate (too thin) triangles
+                    shape_ok = min(a, min(b, c)) / max(a, max(b, c)) >= 0.25
+                    if not shape_ok:
+                        continue
+                    candidate = area * centrality * line_quality * 4.0
+                    if candidate > line_triangle_strength:
+                        line_triangle_strength = candidate
+                        line_triangle_pts = (
+                            (p_ij[0] * width, p_ij[1] * height),
+                            (p_ik[0] * width, p_ik[1] * height),
+                            (p_jk[0] * width, p_jk[1] * height),
+                        )
+
+    if line_triangle_strength > strength:
+        strength = line_triangle_strength
+        best_triangle = np.array(line_triangle_pts, dtype=np.float32)
+
     score = (
         100.0
         * evidence_weight(CompositionMode.TRIANGLE, "area")

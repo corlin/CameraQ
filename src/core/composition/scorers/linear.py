@@ -270,7 +270,30 @@ def score_linear_modes(features: CompositionFeatures):
     )
     cross_strength = min(h_strength, v_strength) * intersection_weight
     silhouette_strength, silhouette_center = _cross_silhouette_strength(features.gray)
-    cross_strength = max(cross_strength, silhouette_strength)
+    # Silhouette fallback: strong cross patterns (≥0.4) pass through at
+    # full strength; weaker ones are scaled down to suppress noise.
+    silhouette_contribution = (
+        silhouette_strength if silhouette_strength >= 0.40
+        else silhouette_strength * 0.35
+    )
+    # Gradient-based cross: two perpendicular dominant gradient directions
+    # with similar energy, concentrated near center.
+    gradient_cross = 0.0
+    gradient_angles = np.asarray(features.gradient_angle) % 180.0
+    gradient_magnitude = np.asarray(features.gradient_magnitude)
+    strong = gradient_magnitude > np.percentile(gradient_magnitude, 75)
+    if np.any(strong):
+        vertical_mask = strong & ((gradient_angles <= 10) | (gradient_angles >= 170))
+        horizontal_mask = strong & (np.abs(gradient_angles - 90) <= 10)
+        v_energy = float(gradient_magnitude[vertical_mask].sum())
+        h_energy = float(gradient_magnitude[horizontal_mask].sum())
+        total_energy = float(gradient_magnitude[strong].sum())
+        if total_energy > 0 and v_energy > 0 and h_energy > 0:
+            # Both directions must have significant presence
+            balance = min(v_energy, h_energy) / max(v_energy, h_energy)
+            combined = (v_energy + h_energy) / total_energy
+            gradient_cross = combined * balance * 0.65
+    cross_strength = max(cross_strength, silhouette_contribution, gradient_cross)
     cross = result(
         CompositionMode.CROSS,
         cross_strength * 100,
@@ -282,7 +305,7 @@ def score_linear_modes(features: CompositionFeatures):
                 "主水平与垂直结构形成交叉",
                 points=(
                     [point(*silhouette_center)]
-                    if silhouette_strength >= min(h_strength, v_strength) * intersection_weight
+                    if silhouette_contribution >= cross_strength * 0.9
                     and silhouette_center is not None
                     else [
                         point(float(value[0]), float(value[1]))
@@ -291,6 +314,6 @@ def score_linear_modes(features: CompositionFeatures):
                 ),
                 lines=[normalized_line(line) for line in (h_lines[:2] + v_lines[:2])],
             )
-        ] if (h_lines and v_lines) or silhouette_center is not None else [],
+        ] if (h_lines and v_lines) or (silhouette_contribution > 0.15 and silhouette_center is not None) else [],
     )
     return [diagonal, horizontal, oblique, cross, vertical]

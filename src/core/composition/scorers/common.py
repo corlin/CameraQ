@@ -24,7 +24,7 @@ def confidence_for(
 ) -> CompositionConfidence:
     if score >= enter_score(mode) and features.evidence_quality >= 0.18:
         return CompositionConfidence.HIGH
-    medium_threshold = min(40.0, exit_score(mode))
+    medium_threshold = min(35.0, exit_score(mode))
     if score >= medium_threshold and features.evidence_quality >= 0.18:
         return CompositionConfidence.MEDIUM
     return CompositionConfidence.LOW

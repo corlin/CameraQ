@@ -271,7 +271,7 @@ class CompositionAnalysis(BaseModel):
     frame_height: int = Field(gt=0)
     evidence_quality: float = Field(ge=0.0, le=1.0)
     mode_results: List[CompositionModeResult]
-    top_modes: List[CompositionMode] = Field(default_factory=list, max_length=3)
+    top_modes: List[CompositionMode] = Field(default_factory=list, max_length=7)
     recommendation: Optional[TargetCompositionRecommendation] = None
     insufficient_evidence: bool = False
     processing_time_ms: float = Field(ge=0.0)

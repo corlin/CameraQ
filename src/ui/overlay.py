@@ -541,8 +541,10 @@ class OverlayRenderer:
             return ["未发现构图模式"]
         if level == "MINIMAL":
             modes = modes[:1]
-        elif level in ("COACH", "PRO"):
+        elif level == "COACH":
             modes = modes[:3]
+        elif level == "PRO":
+            modes = modes[:5]
         else:
             return []
         by_mode = {result.mode: result for result in composition.mode_results}

@@ -33,17 +33,17 @@ def test_medium_confidence_display_candidate_can_be_visible():
 
 def test_medium_display_candidate_uses_display_exit_hysteresis():
     temporal = CompositionTemporalFilter()
-    temporal.update(results(50, confidence=CompositionConfidence.MEDIUM), timestamp=0.0)
+    temporal.update(results(45, confidence=CompositionConfidence.MEDIUM), timestamp=0.0)
     for timestamp in (0.1, 0.2):
         assert visible(
             temporal.update(
-                results(30, confidence=CompositionConfidence.MEDIUM),
+                results(20, confidence=CompositionConfidence.MEDIUM),
                 timestamp=timestamp,
             )
         )
     assert not visible(
         temporal.update(
-            results(30, confidence=CompositionConfidence.MEDIUM), timestamp=0.3
+            results(20, confidence=CompositionConfidence.MEDIUM), timestamp=0.3
         )
     )
 

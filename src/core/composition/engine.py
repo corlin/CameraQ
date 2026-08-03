@@ -71,7 +71,7 @@ class CompositionEngine:
             ),
             reverse=True,
         )
-        top_modes = [item.mode for item in visible_candidates[:3]]
+        top_modes = [item.mode for item in visible_candidates[:5]]
         top_set = set(top_modes)
         results = [item.model_copy(update={"is_visible": item.mode in top_set}) for item in results]
         recommendation = None

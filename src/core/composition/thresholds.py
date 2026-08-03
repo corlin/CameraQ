@@ -5,8 +5,8 @@ ANALYSIS_MAX_EDGE = 320
 ORIENTATION_BINS = 18
 ENTER_SCORE = 65.0
 EXIT_SCORE = 55.0
-DISPLAY_ENTER_SCORE = 45.0
-DISPLAY_EXIT_SCORE = 35.0
+DISPLAY_ENTER_SCORE = 35.0
+DISPLAY_EXIT_SCORE = 25.0
 WEIGHT_CONFIG_VERSION = "reviewed-calibration-v3"
 MODE_ENTER_SCORES = {
     CompositionMode.RULE_OF_THIRDS: 59.46,
@@ -43,7 +43,7 @@ MODE_EXIT_SCORES = {
     CompositionMode.VERTICAL: 13.38,
 }
 MODE_DISPLAY_ENTER_SCORES = {mode: DISPLAY_ENTER_SCORE for mode in CompositionMode}
-MODE_DISPLAY_ENTER_SCORES[CompositionMode.TRIANGLE] = 38.0
+MODE_DISPLAY_ENTER_SCORES[CompositionMode.TRIANGLE] = 28.0
 MODE_DISPLAY_EXIT_SCORES = {
     mode: max(10.0, score - 10.0)
     for mode, score in MODE_DISPLAY_ENTER_SCORES.items()
@@ -66,7 +66,7 @@ MODE_EVIDENCE_WEIGHTS: dict[CompositionMode, dict[str, float]] = {
         "dominance": 0.65,
         "coverage": 0.35,
         "intersection": 1.0,
-        "missing_intersection": 0.45,
+        "missing_intersection": 0.55,
     },
     CompositionMode.VERTICAL: {"dominance": 0.65, "coverage": 0.35},
 }

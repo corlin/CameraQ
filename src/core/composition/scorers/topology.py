@@ -272,7 +272,7 @@ def _radial_and_centripetal(features: CompositionFeatures):
         focus_alignment = max(0.0, 1.0 - math.dist((focus.x, focus.y), center) / 0.25)
     centripetal_strength = convergence * (
         evidence_weight(CompositionMode.CENTRIPETAL, "convergence")
-        + evidence_weight(CompositionMode.CENTRIPETAL, "focus") * focus_alignment
+        + evidence_weight(CompositionMode.CENTRIPETAL, "focus") * max(focus_alignment, 0.45)
     )
     centripetal = result(
         CompositionMode.CENTRIPETAL,
